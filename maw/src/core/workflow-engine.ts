@@ -1,0 +1,691 @@
+/**
+ * Workflow Engine
+ *
+ * Integrates CCW's 4-level workflow system with skills' AI delegation.
+ * Provides JSON-driven task orchestration with parallel execution support.
+ */
+
+import { SessionManager, UnifiedSession, WorkflowLevel, TaskRecord } from './session-manager.js';
+import { BaseAIAdapter, AIExecutionResult, SandboxLevel } from '../adapters/base-adapter.js';
+import { SkillRegistry } from './skill-registry.js';
+import { v4 as uuidv4 } from 'uuid';
+import { existsSync, mkdirSync, writeFileSync, readFileSync } from 'fs';
+import { join } from 'path';
+
+export type PhaseType = 'planning' | 'execution' | 'review' | 'delegation';
+export type AIRole = 'claude' | 'codex' | 'gemini' | 'litellm' | 'auto';
+
+export interface WorkflowPhase {
+  /** Phase identifier */
+  id: string;
+  /** Phase name */
+  name: string;
+  /** Phase type */
+  type: PhaseType;
+  /** Assigned AI for this phase */
+  assignedAI?: AIRole;
+  /** Input requirements */
+  inputs: string[];
+  /** Output definitions */
+  outputs: string[];
+  /** Phase-specific configuration */
+  config?: Record<string, unknown>;
+}
+
+export interface AIAssignment {
+  /** AI responsible for planning */
+  planner: AIRole;
+  /** AIs responsible for execution */
+  executors: AIRole[];
+  /** AIs responsible for review (optional) */
+  reviewers?: AIRole[];
+}
+
+export interface ParallelConfig {
+  /** Maximum concurrent tasks */
+  maxConcurrency: number;
+  /** Whether to respect task dependencies */
+  dependencyAware: boolean;
+}
+
+export interface WorkflowDefinition {
+  /** Workflow name */
+  name: string;
+  /** Workflow level (CCW's 4-level system + new levels) */
+  level: WorkflowLevel;
+  /** Description */
+  description: string;
+  /** Workflow phases */
+  phases: WorkflowPhase[];
+  /** AI assignment strategy */
+  aiAssignment?: AIAssignment;
+  /** Parallel execution configuration */
+  parallelConfig?: ParallelConfig;
+}
+
+export interface TaskDefinition {
+  /** Task ID (e.g., IMPL-1.2) */
+  id: string;
+  /** Task title */
+  title: string;
+  /** Task status */
+  status: 'pending' | 'active' | 'completed' | 'blocked' | 'container';
+  /** Task metadata */
+  meta: {
+    type: 'implementation' | 'testing' | 'planning' | 'refactoring';
+    agent: string;
+  };
+  /** Task context */
+  context: {
+    requirements: string;
+    files?: string[];
+    dependencies?: string[];
+    acceptanceCriteria?: string[];
+  };
+  /** Flow control (execution steps) */
+  flowControl?: {
+    preAnalysis?: FlowStep[];
+    implementationApproach?: FlowStep[];
+  };
+}
+
+export interface FlowStep {
+  action: string;
+  command?: string;
+  outputVar?: string;
+  errorHandling?: 'skip_optional' | 'fail' | 'retry_once' | 'manual_intervention';
+}
+
+export interface WorkflowContext {
+  /** Project root directory */
+  projectRoot: string;
+  /** Task description */
+  task: string;
+  /** Relevant files */
+  relevantFiles?: string[];
+  /** Additional context */
+  additionalContext?: Record<string, unknown>;
+}
+
+export interface WorkflowResult {
+  /** Whether workflow completed successfully */
+  success: boolean;
+  /** Session used for this workflow */
+  session: UnifiedSession;
+  /** Tasks executed */
+  tasks: TaskRecord[];
+  /** Generated artifacts */
+  artifacts?: string[];
+  /** Error if failed */
+  error?: string;
+}
+
+/**
+ * Workflow Engine - Orchestrates multi-AI task execution
+ */
+export class WorkflowEngine {
+  private sessionManager: SessionManager;
+  private skillRegistry: SkillRegistry;
+  private adapters: Map<string, BaseAIAdapter> = new Map();
+  private projectRoot: string;
+  private taskDir: string;
+
+  constructor(
+    projectRoot: string = process.cwd(),
+    sessionManager?: SessionManager,
+    skillRegistry?: SkillRegistry
+  ) {
+    this.projectRoot = projectRoot;
+    this.taskDir = join(projectRoot, '.task');
+    this.sessionManager = sessionManager || new SessionManager(projectRoot);
+    this.skillRegistry = skillRegistry || new SkillRegistry(projectRoot);
+
+    this.ensureDirectories();
+  }
+
+  private ensureDirectories(): void {
+    if (!existsSync(this.taskDir)) {
+      mkdirSync(this.taskDir, { recursive: true });
+    }
+  }
+
+  /**
+   * Register an AI adapter
+   */
+  registerAdapter(adapter: BaseAIAdapter): void {
+    this.adapters.set(adapter.name, adapter);
+  }
+
+  /**
+   * Get adapter by name
+   */
+  getAdapter(name: string): BaseAIAdapter | undefined {
+    return this.adapters.get(name);
+  }
+
+  /**
+   * Execute workflow
+   */
+  async execute(
+    workflow: WorkflowDefinition,
+    context: WorkflowContext
+  ): Promise<WorkflowResult> {
+    // Create session for this workflow
+    const session = await this.sessionManager.createSession({
+      name: `${workflow.name}-${Date.now()}`,
+      workflowLevel: workflow.level,
+      projectRoot: context.projectRoot,
+    });
+
+    const tasks: TaskRecord[] = [];
+
+    try {
+      // Execute each phase
+      for (const phase of workflow.phases) {
+        const phaseResult = await this.executePhase(phase, session, context);
+        tasks.push(...phaseResult.tasks);
+
+        // Stop if phase failed and it's critical
+        if (!phaseResult.success && phase.type !== 'review') {
+          throw new Error(`Phase ${phase.name} failed: ${phaseResult.error}`);
+        }
+      }
+
+      // Mark session as completed
+      this.sessionManager.updateStatus(session.mawSessionId, 'completed');
+
+      return {
+        success: true,
+        session,
+        tasks,
+      };
+    } catch (error) {
+      this.sessionManager.updateStatus(session.mawSessionId, 'paused');
+
+      return {
+        success: false,
+        session,
+        tasks,
+        error: error instanceof Error ? error.message : 'Unknown error',
+      };
+    }
+  }
+
+  /**
+   * Execute a workflow phase
+   */
+  private async executePhase(
+    phase: WorkflowPhase,
+    session: UnifiedSession,
+    context: WorkflowContext
+  ): Promise<{ success: boolean; tasks: TaskRecord[]; error?: string }> {
+    const tasks: TaskRecord[] = [];
+
+    switch (phase.type) {
+      case 'planning':
+        return this.executePlanningPhase(phase, session, context);
+
+      case 'execution':
+        return this.executeExecutionPhase(phase, session, context);
+
+      case 'delegation':
+        return this.executeDelegationPhase(phase, session, context);
+
+      case 'review':
+        return this.executeReviewPhase(phase, session, context);
+
+      default:
+        return { success: true, tasks };
+    }
+  }
+
+  /**
+   * Execute planning phase (Claude generates task plan)
+   */
+  private async executePlanningPhase(
+    phase: WorkflowPhase,
+    session: UnifiedSession,
+    context: WorkflowContext
+  ): Promise<{ success: boolean; tasks: TaskRecord[]; error?: string }> {
+    const tasks: TaskRecord[] = [];
+    const adapter = this.adapters.get(phase.assignedAI || 'claude');
+
+    if (!adapter) {
+      return { success: false, tasks, error: 'No adapter available for planning' };
+    }
+
+    const taskRecord: TaskRecord = {
+      id: uuidv4(),
+      description: `Planning: ${context.task}`,
+      assignedAI: adapter.name,
+      status: 'in_progress',
+      timestamp: new Date(),
+    };
+    tasks.push(taskRecord);
+
+    try {
+      const result = await adapter.execute({
+        prompt: this.buildPlanningPrompt(context),
+        workingDir: context.projectRoot,
+        sandbox: 'read-only',
+        sessionId: session.aiSessions[adapter.name as keyof typeof session.aiSessions],
+      });
+
+      if (result.success) {
+        taskRecord.status = 'completed';
+        taskRecord.result = result.content;
+
+        // Save plan to .task directory (CCW pattern)
+        const planPath = join(this.taskDir, `IMPL_PLAN-${session.mawSessionId}.json`);
+        writeFileSync(planPath, JSON.stringify({
+          sessionId: session.mawSessionId,
+          plan: result.content,
+          timestamp: new Date().toISOString(),
+        }, null, 2));
+
+        // Link session ID if returned
+        if (result.sessionId) {
+          await this.sessionManager.linkExternalSession(
+            session,
+            adapter.name as 'codex' | 'gemini',
+            result.sessionId
+          );
+        }
+      } else {
+        taskRecord.status = 'failed';
+        return { success: false, tasks, error: result.error };
+      }
+    } catch (error) {
+      taskRecord.status = 'failed';
+      return {
+        success: false,
+        tasks,
+        error: error instanceof Error ? error.message : 'Planning failed',
+      };
+    }
+
+    return { success: true, tasks };
+  }
+
+  /**
+   * Execute delegation phase (delegate to Codex/Gemini)
+   * This integrates the skills project's 5-phase collaboration pattern
+   */
+  private async executeDelegationPhase(
+    phase: WorkflowPhase,
+    session: UnifiedSession,
+    context: WorkflowContext
+  ): Promise<{ success: boolean; tasks: TaskRecord[]; error?: string }> {
+    const tasks: TaskRecord[] = [];
+    const assignedAI = phase.assignedAI || 'codex';
+    const adapter = this.adapters.get(assignedAI);
+
+    if (!adapter) {
+      return { success: false, tasks, error: `No adapter for ${assignedAI}` };
+    }
+
+    const taskRecord: TaskRecord = {
+      id: uuidv4(),
+      description: `Delegating to ${assignedAI}: ${context.task}`,
+      assignedAI,
+      status: 'in_progress',
+      timestamp: new Date(),
+    };
+    tasks.push(taskRecord);
+
+    try {
+      // Phase 1: Context retrieval (using CodexLens if available)
+      const relevantCode = context.relevantFiles || [];
+
+      // Phase 2-3: Execute with external AI (read-only sandbox)
+      const result = await adapter.execute({
+        prompt: this.buildDelegationPrompt(context, phase),
+        workingDir: context.projectRoot,
+        sandbox: 'read-only', // External AI has no write access (skills pattern)
+        sessionId: session.aiSessions[assignedAI as keyof typeof session.aiSessions],
+        context: { relevantFiles: relevantCode },
+      });
+
+      if (result.success) {
+        taskRecord.status = 'completed';
+        taskRecord.result = result.content;
+
+        // Save SESSION_ID for multi-turn support
+        if (result.sessionId) {
+          await this.sessionManager.linkExternalSession(
+            session,
+            assignedAI as 'codex' | 'gemini',
+            result.sessionId
+          );
+        }
+
+        // Phase 4-5: Claude would refactor and review (handled in subsequent phases)
+      } else {
+        taskRecord.status = 'failed';
+        return { success: false, tasks, error: result.error };
+      }
+    } catch (error) {
+      taskRecord.status = 'failed';
+      return {
+        success: false,
+        tasks,
+        error: error instanceof Error ? error.message : 'Delegation failed',
+      };
+    }
+
+    return { success: true, tasks };
+  }
+
+  /**
+   * Execute execution phase
+   */
+  private async executeExecutionPhase(
+    phase: WorkflowPhase,
+    session: UnifiedSession,
+    context: WorkflowContext
+  ): Promise<{ success: boolean; tasks: TaskRecord[]; error?: string }> {
+    // Similar to delegation but with potential write access
+    return this.executeDelegationPhase(phase, session, context);
+  }
+
+  /**
+   * Execute review phase
+   */
+  private async executeReviewPhase(
+    phase: WorkflowPhase,
+    session: UnifiedSession,
+    context: WorkflowContext
+  ): Promise<{ success: boolean; tasks: TaskRecord[]; error?: string }> {
+    const tasks: TaskRecord[] = [];
+    const adapter = this.adapters.get(phase.assignedAI || 'claude');
+
+    if (!adapter) {
+      return { success: true, tasks }; // Review is optional
+    }
+
+    const taskRecord: TaskRecord = {
+      id: uuidv4(),
+      description: `Review: ${context.task}`,
+      assignedAI: adapter.name,
+      status: 'in_progress',
+      timestamp: new Date(),
+    };
+    tasks.push(taskRecord);
+
+    try {
+      const result = await adapter.execute({
+        prompt: this.buildReviewPrompt(context, session),
+        workingDir: context.projectRoot,
+        sandbox: 'read-only',
+      });
+
+      taskRecord.status = result.success ? 'completed' : 'failed';
+      taskRecord.result = result.content;
+    } catch {
+      taskRecord.status = 'failed';
+    }
+
+    return { success: true, tasks };
+  }
+
+  /**
+   * Build planning prompt
+   */
+  private buildPlanningPrompt(context: WorkflowContext): string {
+    return `
+PURPOSE: Generate a detailed implementation plan
+TASK: ${context.task}
+MODE: planning
+CONTEXT: Project root: ${context.projectRoot}
+${context.relevantFiles ? `Relevant files: ${context.relevantFiles.join(', ')}` : ''}
+EXPECTED: JSON task definitions following IMPL-N.M format
+CONSTRAINTS: Maximum 10 tasks, clear dependencies
+    `.trim();
+  }
+
+  /**
+   * Build delegation prompt (following skills pattern)
+   */
+  private buildDelegationPrompt(
+    context: WorkflowContext,
+    phase: WorkflowPhase
+  ): string {
+    const config = phase.config || {};
+    return `
+${config.prompt || context.task}
+
+Working directory: ${context.projectRoot}
+${context.relevantFiles ? `Context files: ${context.relevantFiles.join(', ')}` : ''}
+
+Please provide your analysis and implementation as unified diff format where applicable.
+    `.trim();
+  }
+
+  /**
+   * Build review prompt
+   */
+  private buildReviewPrompt(
+    context: WorkflowContext,
+    session: UnifiedSession
+  ): string {
+    return `
+Review the implementation for: ${context.task}
+
+Check for:
+- Code quality and best practices
+- Security vulnerabilities
+- Performance issues
+- Test coverage
+
+Session history: ${session.sharedContext.taskHistory.length} tasks completed
+    `.trim();
+  }
+
+  // ============================================
+  // Predefined Workflows (CCW's 4 levels)
+  // ============================================
+
+  /**
+   * Level 1: Lite workflow - instant execution
+   */
+  static createLiteWorkflow(task: string): WorkflowDefinition {
+    return {
+      name: 'lite',
+      level: 'lite',
+      description: 'Instant execution, no artifacts',
+      phases: [
+        {
+          id: 'execute',
+          name: 'Execute',
+          type: 'execution',
+          assignedAI: 'claude',
+          inputs: ['task'],
+          outputs: ['result'],
+        },
+      ],
+    };
+  }
+
+  /**
+   * Level 2: Lite-plan workflow
+   */
+  static createLitePlanWorkflow(task: string): WorkflowDefinition {
+    return {
+      name: 'lite-plan',
+      level: 'lite-plan',
+      description: 'Lightweight planning with optional execution',
+      phases: [
+        {
+          id: 'plan',
+          name: 'Quick Plan',
+          type: 'planning',
+          assignedAI: 'claude',
+          inputs: ['task'],
+          outputs: ['plan'],
+        },
+        {
+          id: 'execute',
+          name: 'Execute',
+          type: 'execution',
+          assignedAI: 'claude',
+          inputs: ['plan'],
+          outputs: ['result'],
+        },
+      ],
+    };
+  }
+
+  /**
+   * Level 3: Standard plan workflow
+   */
+  static createPlanWorkflow(task: string): WorkflowDefinition {
+    return {
+      name: 'plan',
+      level: 'plan',
+      description: 'Standard planning with session persistence',
+      phases: [
+        {
+          id: 'plan',
+          name: 'Planning',
+          type: 'planning',
+          assignedAI: 'claude',
+          inputs: ['task'],
+          outputs: ['plan', 'tasks'],
+        },
+        {
+          id: 'delegate-codex',
+          name: 'Delegate to Codex',
+          type: 'delegation',
+          assignedAI: 'codex',
+          inputs: ['tasks'],
+          outputs: ['implementation'],
+        },
+        {
+          id: 'review',
+          name: 'Review',
+          type: 'review',
+          assignedAI: 'claude',
+          inputs: ['implementation'],
+          outputs: ['review'],
+        },
+      ],
+      aiAssignment: {
+        planner: 'claude',
+        executors: ['codex'],
+        reviewers: ['claude'],
+      },
+    };
+  }
+
+  /**
+   * Level 4: Brainstorm workflow
+   */
+  static createBrainstormWorkflow(
+    topic: string,
+    parallel: boolean = true
+  ): WorkflowDefinition {
+    return {
+      name: 'brainstorm',
+      level: 'brainstorm',
+      description: 'Multi-role parallel brainstorming',
+      phases: [
+        {
+          id: 'brainstorm-codex',
+          name: 'Codex Analysis',
+          type: 'delegation',
+          assignedAI: 'codex',
+          inputs: ['topic'],
+          outputs: ['codex-analysis'],
+        },
+        {
+          id: 'brainstorm-gemini',
+          name: 'Gemini Analysis',
+          type: 'delegation',
+          assignedAI: 'gemini',
+          inputs: ['topic'],
+          outputs: ['gemini-analysis'],
+        },
+        {
+          id: 'synthesize',
+          name: 'Synthesize',
+          type: 'planning',
+          assignedAI: 'claude',
+          inputs: ['codex-analysis', 'gemini-analysis'],
+          outputs: ['guidance-specification'],
+        },
+      ],
+      aiAssignment: {
+        planner: 'claude',
+        executors: ['codex', 'gemini'],
+      },
+      parallelConfig: {
+        maxConcurrency: parallel ? 2 : 1,
+        dependencyAware: true,
+      },
+    };
+  }
+
+  /**
+   * New: Collaborate workflow (Claude + Codex + Gemini)
+   */
+  static createCollaborateWorkflow(task: string): WorkflowDefinition {
+    return {
+      name: 'collaborate',
+      level: 'collaborate',
+      description: 'Multi-AI collaboration: Claude plans, Codex/Gemini execute',
+      phases: [
+        {
+          id: 'plan',
+          name: 'Claude Planning',
+          type: 'planning',
+          assignedAI: 'claude',
+          inputs: ['task'],
+          outputs: ['plan', 'backend-tasks', 'frontend-tasks'],
+        },
+        {
+          id: 'backend',
+          name: 'Codex Backend',
+          type: 'delegation',
+          assignedAI: 'codex',
+          inputs: ['backend-tasks'],
+          outputs: ['backend-impl'],
+        },
+        {
+          id: 'frontend',
+          name: 'Gemini Frontend',
+          type: 'delegation',
+          assignedAI: 'gemini',
+          inputs: ['frontend-tasks'],
+          outputs: ['frontend-impl'],
+        },
+        {
+          id: 'integrate',
+          name: 'Claude Integration',
+          type: 'execution',
+          assignedAI: 'claude',
+          inputs: ['backend-impl', 'frontend-impl'],
+          outputs: ['integrated-code'],
+        },
+        {
+          id: 'review',
+          name: 'Dual Review',
+          type: 'review',
+          assignedAI: 'claude',
+          inputs: ['integrated-code'],
+          outputs: ['final-review'],
+        },
+      ],
+      aiAssignment: {
+        planner: 'claude',
+        executors: ['codex', 'gemini'],
+        reviewers: ['claude'],
+      },
+      parallelConfig: {
+        maxConcurrency: 2,
+        dependencyAware: true,
+      },
+    };
+  }
+}
+
+export default WorkflowEngine;

@@ -1,0 +1,44 @@
+{
+  "version": "0.1.0",
+  "ai": {
+    "claude": {
+      "enabled": true
+    },
+    "codex": {
+      "enabled": true,
+      "cliPath": "codex"
+    },
+    "gemini": {
+      "enabled": true,
+      "cliPath": "gemini"
+    },
+    "litellm": {
+      "enabled": false
+    }
+  },
+  "workflow": {
+    "defaultLevel": "plan",
+    "parallelExecution": true,
+    "maxConcurrency": 2,
+    "stateDir": ".task",
+    "sessionDir": ".workflow"
+  },
+  "skills": {
+    "searchPaths": ["./.maw/skills", "~/.maw/skills"],
+    "autoDiscover": true,
+    "enabledSkills": []
+  },
+  "security": {
+    "defaultSandbox": "read-only",
+    "maxExecutionTime": 300000
+  },
+  "codexLens": {
+    "enabled": true,
+    "indexPath": ".maw/index",
+    "searchMode": "hybrid"
+  },
+  "dashboard": {
+    "port": 3000,
+    "autoOpen": true
+  }
+}

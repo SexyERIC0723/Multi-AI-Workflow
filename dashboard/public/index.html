@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MAW Dashboard - Multi-AI Workflow</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div id="app">
+    <!-- Header -->
+    <header class="header">
+      <div class="header-left">
+        <h1 class="logo">MAW</h1>
+        <span class="subtitle">Multi-AI Workflow Dashboard</span>
+      </div>
+      <div class="header-right">
+        <span id="connection-status" class="status-badge disconnected">Disconnected</span>
+      </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="main">
+      <!-- Sidebar -->
+      <aside class="sidebar">
+        <nav class="nav">
+          <a href="#" class="nav-item active" data-view="overview">
+            <span class="nav-icon">📊</span>
+            Overview
+          </a>
+          <a href="#" class="nav-item" data-view="sessions">
+            <span class="nav-icon">📁</span>
+            Sessions
+          </a>
+          <a href="#" class="nav-item" data-view="workflows">
+            <span class="nav-icon">🔄</span>
+            Workflows
+          </a>
+          <a href="#" class="nav-item" data-view="ai-logs">
+            <span class="nav-icon">🤖</span>
+            AI Logs
+          </a>
+          <a href="#" class="nav-item" data-view="search">
+            <span class="nav-icon">🔍</span>
+            Code Search
+          </a>
+        </nav>
+      </aside>
+
+      <!-- Content Area -->
+      <div class="content">
+        <!-- Overview View -->
+        <section id="view-overview" class="view active">
+          <h2>Overview</h2>
+          <div class="stats-grid">
+            <div class="stat-card">
+              <div class="stat-value" id="stat-sessions">-</div>
+              <div class="stat-label">Total Sessions</div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-value" id="stat-active">-</div>
+              <div class="stat-label">Active Sessions</div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-value" id="stat-workflows">-</div>
+              <div class="stat-label">Workflow Runs</div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-value" id="stat-ai">-</div>
+              <div class="stat-label">AI Executions</div>
+            </div>
+          </div>
+
+          <h3>AI Provider Usage</h3>
+          <div class="ai-usage" id="ai-usage">
+            <p class="loading">Loading...</p>
+          </div>
+
+          <h3>Recent Activity</h3>
+          <div id="recent-activity" class="activity-list">
+            <p class="loading">Loading...</p>
+          </div>
+        </section>
+
+        <!-- Sessions View -->
+        <section id="view-sessions" class="view">
+          <div class="view-header">
+            <h2>Sessions</h2>
+            <button class="btn btn-primary" onclick="createSession()">+ New Session</button>
+          </div>
+          <div class="filter-bar">
+            <select id="session-status-filter" onchange="loadSessions()">
+              <option value="">All Status</option>
+              <option value="active">Active</option>
+              <option value="completed">Completed</option>
+              <option value="paused">Paused</option>
+              <option value="error">Error</option>
+            </select>
+          </div>
+          <div id="sessions-list" class="data-list">
+            <p class="loading">Loading...</p>
+          </div>
+        </section>
+
+        <!-- Workflows View -->
+        <section id="view-workflows" class="view">
+          <h2>Workflow Runs</h2>
+          <div id="workflows-list" class="data-list">
+            <p class="loading">Loading...</p>
+          </div>
+        </section>
+
+        <!-- AI Logs View -->
+        <section id="view-ai-logs" class="view">
+          <h2>AI Execution Logs</h2>
+          <div class="filter-bar">
+            <select id="ai-provider-filter" onchange="loadAILogs()">
+              <option value="">All Providers</option>
+              <option value="claude">Claude</option>
+              <option value="codex">Codex</option>
+              <option value="gemini">Gemini</option>
+            </select>
+          </div>
+          <div id="ai-logs-list" class="data-list">
+            <p class="loading">Loading...</p>
+          </div>
+        </section>
+
+        <!-- Search View -->
+        <section id="view-search" class="view">
+          <h2>Code Search</h2>
+          <div class="search-box">
+            <input type="text" id="search-query" placeholder="Search code..." onkeypress="if(event.key==='Enter') performSearch()">
+            <button class="btn btn-primary" onclick="performSearch()">Search</button>
+          </div>
+          <div id="search-results" class="search-results">
+            <p class="placeholder">Enter a search query to find code</p>
+          </div>
+        </section>
+      </div>
+    </main>
+
+    <!-- Modal -->
+    <div id="modal" class="modal">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h3 id="modal-title">Modal Title</h3>
+          <button class="modal-close" onclick="closeModal()">&times;</button>
+        </div>
+        <div id="modal-body" class="modal-body">
+          <!-- Modal content -->
+        </div>
+        <div class="modal-footer">
+          <button class="btn" onclick="closeModal()">Cancel</button>
+          <button class="btn btn-primary" id="modal-confirm">Confirm</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
