@@ -58,9 +58,30 @@ workflowCmd
     await executeBrainstorm(topic, options);
   });
 
+workflowCmd
+  .command('five-phase <task>')
+  .description('5-Phase collaboration (Skills pattern): Context → Analysis → Prototype → Implement → Audit')
+  .option('-p, --parallel', 'Enable parallel analysis', true)
+  .action(async (task: string, options: { parallel: boolean }) => {
+    const { executeFivePhase } = await import('./commands/workflow.js');
+    await executeFivePhase(task, options);
+  });
+
 // ============================================
 // AI Delegation Commands (from skills)
 // ============================================
+
+// Semantic routing - auto-select AI based on task description (CCW feature)
+program
+  .command('run <task>')
+  .description('Auto-route task to best AI using semantic analysis')
+  .option('--cd <dir>', 'Working directory', process.cwd())
+  .option('-s, --sandbox <level>', 'Sandbox level', 'read-only')
+  .option('--prefer <ai>', 'Preferred AI if ambiguous')
+  .action(async (task: string, options) => {
+    const { semanticRoute } = await import('./commands/delegate.js');
+    await semanticRoute(task, options);
+  });
 
 program
   .command('delegate <ai> <task>')

@@ -186,3 +186,114 @@ export async function executeBrainstorm(
     console.error(error instanceof Error ? error.message : 'Unknown error');
   }
 }
+
+/**
+ * Execute 5-Phase collaboration workflow (from GuDaStudio/skills pattern)
+ *
+ * Phase 1: Context Retrieval - Find relevant files
+ * Phase 2: Multi-Model Analysis - Parallel analysis by Codex and Gemini
+ * Phase 3: Prototype Generation - Generate unified diff patches (read-only)
+ * Phase 4: Implementation - Claude refactors and applies changes
+ * Phase 5: Audit - Security and quality review
+ */
+export async function executeFivePhase(
+  task: string,
+  options: { parallel: boolean }
+): Promise<void> {
+  console.log(chalk.cyan('\n╔══════════════════════════════════════════════════════════════╗'));
+  console.log(chalk.cyan('║  5-Phase Collaboration Workflow (Skills Pattern)             ║'));
+  console.log(chalk.cyan('║  Context → Analysis → Prototype → Implement → Audit         ║'));
+  console.log(chalk.cyan('╚══════════════════════════════════════════════════════════════╝\n'));
+
+  const spinner = ora('Initializing 5-phase workflow...').start();
+
+  try {
+    const config = loadConfig();
+    const engine = new WorkflowEngine();
+
+    // Register all AI adapters
+    engine.registerAdapter(new ClaudeAdapter({ name: 'claude', enabled: true }));
+
+    if (config.ai.codex.enabled) {
+      engine.registerAdapter(new CodexAdapter({
+        name: 'codex',
+        enabled: true,
+        cliPath: config.ai.codex.cliPath,
+      }));
+    }
+
+    if (config.ai.gemini.enabled) {
+      engine.registerAdapter(new GeminiAdapter({
+        name: 'gemini',
+        enabled: true,
+        cliPath: config.ai.gemini.cliPath,
+      }));
+    }
+
+    const workflow = WorkflowEngine.createFivePhaseWorkflow(task);
+
+    // Adjust parallelism if needed
+    if (!options.parallel) {
+      workflow.parallelConfig = {
+        maxConcurrency: 1,
+        dependencyAware: true,
+      };
+    }
+
+    const context: WorkflowContext = {
+      projectRoot: process.cwd(),
+      task,
+    };
+
+    // Execute with phase tracking
+    const phases = [
+      { id: 'context', name: 'Context Retrieval', icon: '📂' },
+      { id: 'analysis-codex', name: 'Codex Analysis', icon: '🔍' },
+      { id: 'analysis-gemini', name: 'Gemini Analysis', icon: '🔍' },
+      { id: 'prototype', name: 'Prototype Generation', icon: '📝' },
+      { id: 'implement', name: 'Implementation', icon: '🔧' },
+      { id: 'audit', name: 'Security & Quality Audit', icon: '🛡️' },
+    ];
+
+    spinner.text = `Phase 1/5: ${phases[0].icon} ${phases[0].name}...`;
+    const result = await engine.execute(workflow, context);
+
+    if (result.success) {
+      spinner.succeed(chalk.green('5-Phase workflow completed successfully'));
+
+      console.log(chalk.dim('\n┌─────────────────────────────────────────┐'));
+      console.log(chalk.dim('│ Session:'), result.session.mawSessionId.substring(0, 8) + '...');
+      console.log(chalk.dim('│ Parallel:'), options.parallel);
+      console.log(chalk.dim('│ Total Tasks:'), result.tasks.length);
+      console.log(chalk.dim('└─────────────────────────────────────────┘'));
+
+      // Show phase summary
+      console.log(chalk.cyan('\n--- Phase Summary ---'));
+      for (const task of result.tasks) {
+        const phase = phases.find(p => p.id === task.id) || { icon: '○', name: task.description };
+        const icon = task.status === 'completed' ? '✓' : task.status === 'failed' ? '✗' : '○';
+        const color = task.status === 'completed' ? chalk.green : task.status === 'failed' ? chalk.red : chalk.yellow;
+        console.log(color(`  ${icon} ${phase.icon || ''} [${task.assignedAI}] ${task.description}`));
+      }
+
+      // Show AI session IDs for continuation
+      console.log(chalk.cyan('\n--- AI Session IDs (for continuation) ---'));
+      const aiSessions = result.session.aiSessions;
+      for (const [ai, sessionId] of Object.entries(aiSessions)) {
+        if (sessionId) {
+          console.log(chalk.dim(`  ${ai}:`), sessionId);
+        }
+      }
+
+      // Security note
+      console.log(chalk.yellow('\n⚠️  Note: External AIs (Codex/Gemini) operated in read-only mode.'));
+      console.log(chalk.dim('   All file modifications were performed by Claude after review.'));
+    } else {
+      spinner.fail(chalk.red('5-Phase workflow failed'));
+      console.error(chalk.red(result.error));
+    }
+  } catch (error) {
+    spinner.fail(chalk.red('Workflow error'));
+    console.error(error instanceof Error ? error.message : 'Unknown error');
+  }
+}

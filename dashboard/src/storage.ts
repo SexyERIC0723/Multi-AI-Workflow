@@ -316,6 +316,53 @@ export class DashboardStorage {
     return this.getWorkflowRun(id);
   }
 
+  /**
+   * Get workflow run by task ID (for MAW bridge sync)
+   */
+  getWorkflowByTaskId(taskId: string): WorkflowRun | null {
+    const stmt = this.db.prepare(`
+      SELECT id, session_id as sessionId, level, task, status,
+             started_at as startedAt, completed_at as completedAt,
+             result, error
+      FROM workflow_runs WHERE id = ? OR task LIKE ?
+    `);
+
+    return stmt.get(taskId, `%${taskId}%`) as WorkflowRun | null;
+  }
+
+  /**
+   * Get all workflows for a session
+   */
+  getWorkflowsBySession(sessionId: string): WorkflowRun[] {
+    const stmt = this.db.prepare(`
+      SELECT id, session_id as sessionId, level, task, status,
+             started_at as startedAt, completed_at as completedAt,
+             result, error
+      FROM workflow_runs
+      WHERE session_id = ?
+      ORDER BY started_at DESC
+    `);
+
+    return stmt.all(sessionId) as WorkflowRun[];
+  }
+
+  /**
+   * Get AI logs for a session
+   */
+  getAILogsBySession(sessionId: string): AIExecutionLog[] {
+    const stmt = this.db.prepare(`
+      SELECT id, session_id as sessionId, ai_provider as aiProvider,
+             prompt, response, status,
+             started_at as startedAt, completed_at as completedAt,
+             tokens_used as tokensUsed, error
+      FROM ai_logs
+      WHERE session_id = ?
+      ORDER BY started_at DESC
+    `);
+
+    return stmt.all(sessionId) as AIExecutionLog[];
+  }
+
   // ============= AI Execution Logs =============
 
   createAILog(log: Omit<AIExecutionLog, 'startedAt'>): AIExecutionLog {

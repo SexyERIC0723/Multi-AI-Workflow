@@ -11,6 +11,7 @@ import { WebSocketServer, WebSocket } from 'ws';
 import { createServer } from 'http';
 import path from 'path';
 import { DashboardStorage } from './storage';
+import { MAWBridge } from './maw-bridge';
 import { createApiRoutes } from './routes/api';
 
 interface DashboardConfig {
@@ -23,6 +24,7 @@ export class DashboardServer {
   private app: express.Application;
   private wss: WebSocketServer | null = null;
   private storage: DashboardStorage;
+  private mawBridge: MAWBridge;
   private config: DashboardConfig;
   private clients: Set<WebSocket> = new Set();
 
@@ -34,6 +36,7 @@ export class DashboardServer {
     };
 
     this.storage = new DashboardStorage(this.config.dataDir);
+    this.mawBridge = new MAWBridge(this.config.dataDir, this.storage);
     this.app = express();
     this.setupMiddleware();
     this.setupRoutes();
@@ -52,8 +55,8 @@ export class DashboardServer {
   }
 
   private setupRoutes(): void {
-    // API routes
-    const apiRouter = createApiRoutes(this.storage, this);
+    // API routes with MAW bridge
+    const apiRouter = createApiRoutes(this.storage, this, this.mawBridge);
     this.app.use('/api', apiRouter);
 
     // Static files
@@ -89,7 +92,10 @@ export class DashboardServer {
   /**
    * Start the server
    */
-  start(): Promise<void> {
+  async start(): Promise<void> {
+    // Initialize MAW bridge
+    await this.mawBridge.initialize();
+
     return new Promise((resolve) => {
       const server = createServer(this.app);
 

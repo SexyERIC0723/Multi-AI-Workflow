@@ -2,8 +2,8 @@
 """
 Codex Bridge - Python wrapper for Codex CLI
 
-Provides JSON-based interface for Claude to delegate tasks to Codex.
 Based on GuDaStudio/skills collaborating-with-codex implementation.
+Provides JSON-based interface for Claude to delegate tasks to Codex.
 
 Usage:
     python codex_bridge.py --PROMPT "task" --cd "/path" [options]
@@ -15,260 +15,348 @@ Returns JSON:
         "agent_messages": "response content"
     }
 """
+from __future__ import annotations
 
-import argparse
 import json
+import re
 import os
-import platform
+import sys
 import queue
 import subprocess
-import sys
 import threading
+import time
+import shutil
+import argparse
 from pathlib import Path
-from typing import Dict, List, Optional, Any
+from typing import Generator, List, Optional
 
 
-def _get_windows_npm_paths() -> List[str]:
-    """Get potential npm installation paths on Windows."""
-    paths = []
-
-    npm_prefix = os.environ.get('NPM_CONFIG_PREFIX')
-    if npm_prefix:
-        paths.append(npm_prefix)
-
-    appdata = os.environ.get('APPDATA')
-    if appdata:
-        paths.append(os.path.join(appdata, 'npm'))
-
-    program_files = os.environ.get('ProgramFiles')
-    if program_files:
-        paths.append(os.path.join(program_files, 'nodejs'))
-
+def _get_windows_npm_paths() -> List[Path]:
+    """Return candidate directories for npm global installs on Windows."""
+    if os.name != "nt":
+        return []
+    paths: List[Path] = []
+    env = os.environ
+    if prefix := env.get("NPM_CONFIG_PREFIX") or env.get("npm_config_prefix"):
+        paths.append(Path(prefix))
+    if appdata := env.get("APPDATA"):
+        paths.append(Path(appdata) / "npm")
+    if localappdata := env.get("LOCALAPPDATA"):
+        paths.append(Path(localappdata) / "npm")
+    if programfiles := env.get("ProgramFiles"):
+        paths.append(Path(programfiles) / "nodejs")
     return paths
 
 
-def _augment_path_env(env: Dict[str, str], npm_paths: List[str]) -> Dict[str, str]:
-    """Add npm paths to PATH environment variable."""
-    current_path = env.get('PATH', '')
-    new_paths = [p for p in npm_paths if os.path.exists(p)]
-
-    if new_paths:
-        env['PATH'] = os.pathsep.join(new_paths + [current_path])
-
-    return env
-
-
-def _resolve_executable(cmd: str, env: Dict[str, str]) -> str:
-    """Resolve executable path, handling Windows .cmd files."""
-    if platform.system() == 'Windows':
-        for ext in ['.cmd', '.bat', '.exe', '']:
-            for path_dir in env.get('PATH', '').split(os.pathsep):
-                full_path = os.path.join(path_dir, cmd + ext)
-                if os.path.exists(full_path):
-                    return full_path
-    return cmd
+def _augment_path_env(env: dict) -> None:
+    """Prepend npm global directories to PATH if missing."""
+    if os.name != "nt":
+        return
+    path_key = next((k for k in env if k.upper() == "PATH"), "PATH")
+    path_entries = [p for p in env.get(path_key, "").split(os.pathsep) if p]
+    lower_set = {p.lower() for p in path_entries}
+    for candidate in _get_windows_npm_paths():
+        if candidate.is_dir() and str(candidate).lower() not in lower_set:
+            path_entries.insert(0, str(candidate))
+            lower_set.add(str(candidate).lower())
+    env[path_key] = os.pathsep.join(path_entries)
 
 
-def run_shell_command(
-    cmd: List[str],
-    cwd: Optional[str] = None,
-    env: Optional[Dict[str, str]] = None,
-    timeout: int = 300
-) -> Dict[str, Any]:
-    """
-    Execute shell command and capture output.
+def _resolve_executable(name: str, env: dict) -> str:
+    """Resolve executable path, checking npm directories for .cmd/.bat on Windows."""
+    if os.path.isabs(name) or os.sep in name or (os.altsep and os.altsep in name):
+        return name
+    path_key = next((k for k in env if k.upper() == "PATH"), "PATH")
+    path_val = env.get(path_key)
+    win_exts = {".exe", ".cmd", ".bat", ".com"}
+    if resolved := shutil.which(name, path=path_val):
+        if os.name == "nt":
+            suffix = Path(resolved).suffix.lower()
+            if not suffix:
+                resolved_dir = str(Path(resolved).parent)
+                for ext in (".cmd", ".bat", ".exe", ".com"):
+                    candidate = Path(resolved_dir) / f"{name}{ext}"
+                    if candidate.is_file():
+                        return str(candidate)
+            elif suffix not in win_exts:
+                return resolved
+        return resolved
+    if os.name == "nt":
+        for base in _get_windows_npm_paths():
+            for ext in (".cmd", ".bat", ".exe", ".com"):
+                candidate = base / f"{name}{ext}"
+                if candidate.is_file():
+                    return str(candidate)
+    return name
 
-    Returns dict with success, output, and parsed messages.
-    """
-    if env is None:
-        env = os.environ.copy()
 
-    # Add npm paths on Windows
-    if platform.system() == 'Windows':
-        npm_paths = _get_windows_npm_paths()
-        env = _augment_path_env(env, npm_paths)
+def run_shell_command(cmd: List[str], cwd: Optional[str] = None) -> Generator[str, None, None]:
+    """Execute a command and stream its output line-by-line."""
+    env = os.environ.copy()
+    _augment_path_env(env)
 
-    # Resolve executable
-    cmd[0] = _resolve_executable(cmd[0], env)
+    popen_cmd = cmd.copy()
+    exe_path = _resolve_executable(cmd[0], env)
+    popen_cmd[0] = exe_path
 
-    result = {
-        'success': False,
-        'SESSION_ID': None,
-        'agent_messages': '',
-        'all_messages': [],
-        'error': None
-    }
+    # Windows .cmd/.bat files need cmd.exe wrapper (avoid shell=True for security)
+    if os.name == "nt" and Path(exe_path).suffix.lower() in {".cmd", ".bat"}:
+        def _cmd_quote(arg: str) -> str:
+            if not arg:
+                return '""'
+            arg = arg.replace('%', '%%')
+            arg = arg.replace('^', '^^')
+            if any(c in arg for c in '&|<>()^" \t'):
+                escaped = arg.replace('"', '"^""')
+                return f'"{escaped}"'
+            return arg
+        cmdline = " ".join(_cmd_quote(a) for a in popen_cmd)
+        comspec = env.get("COMSPEC", "cmd.exe")
+        popen_cmd = f'"{comspec}" /d /s /c "{cmdline}"'
+
+    process = subprocess.Popen(
+        popen_cmd,
+        shell=False,
+        stdin=subprocess.DEVNULL,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        universal_newlines=True,
+        encoding='utf-8',
+        errors='replace',
+        cwd=cwd,
+        env=env,
+    )
+
+    output_queue: queue.Queue[Optional[str]] = queue.Queue()
+    GRACEFUL_SHUTDOWN_DELAY = 0.3
+
+    def is_turn_completed(line: str) -> bool:
+        try:
+            data = json.loads(line)
+            return data.get("type") == "turn.completed"
+        except (json.JSONDecodeError, AttributeError, TypeError):
+            return False
+
+    def read_output() -> None:
+        if process.stdout:
+            for line in iter(process.stdout.readline, ""):
+                stripped = line.strip()
+                output_queue.put(stripped)
+                if is_turn_completed(stripped):
+                    time.sleep(GRACEFUL_SHUTDOWN_DELAY)
+                    process.terminate()
+                    break
+            process.stdout.close()
+        output_queue.put(None)
+
+    thread = threading.Thread(target=read_output)
+    thread.start()
+
+    while True:
+        try:
+            line = output_queue.get(timeout=0.5)
+            if line is None:
+                break
+            yield line
+        except queue.Empty:
+            if process.poll() is not None and not thread.is_alive():
+                break
 
     try:
-        proc = subprocess.Popen(
-            cmd,
-            cwd=cwd,
-            env=env,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.STDOUT,
-            text=True,
-            bufsize=1
-        )
-
-        output_lines = []
-
-        # Read output with timeout
-        def read_output():
-            for line in proc.stdout:
-                output_lines.append(line.rstrip())
-
-        reader = threading.Thread(target=read_output)
-        reader.daemon = True
-        reader.start()
-        reader.join(timeout=timeout)
-
-        proc.wait(timeout=5)
-
-        # Parse output
-        agent_messages = []
-        session_id = None
-
-        for line in output_lines:
-            try:
-                msg = json.loads(line)
-                result['all_messages'].append(msg)
-
-                # Extract agent messages
-                if msg.get('type') == 'agent_message':
-                    agent_messages.append(msg.get('content', ''))
-
-                # Extract session ID
-                if msg.get('type') == 'turn.completed':
-                    session_id = msg.get('thread_id')
-
-                # Alternative session ID location
-                if 'thread_id' in msg and not session_id:
-                    session_id = msg['thread_id']
-
-            except json.JSONDecodeError:
-                # Non-JSON output, add to messages
-                if line.strip() and not line.startswith('Warning:'):
-                    agent_messages.append(line)
-
-        result['success'] = proc.returncode == 0
-        result['SESSION_ID'] = session_id
-        result['agent_messages'] = '\n'.join(agent_messages)
-
+        process.wait(timeout=5)
     except subprocess.TimeoutExpired:
-        result['error'] = f'Command timed out after {timeout}s'
-        proc.kill()
-    except Exception as e:
-        result['error'] = str(e)
+        process.kill()
+        process.wait()
+    thread.join(timeout=5)
 
+    while not output_queue.empty():
+        try:
+            line = output_queue.get_nowait()
+            if line is not None:
+                yield line
+        except queue.Empty:
+            break
+
+
+def windows_escape(prompt: str) -> str:
+    """Windows style string escaping for newlines and special chars in prompt text."""
+    result = prompt.replace('\n', '\\n')
+    result = result.replace('\r', '\\r')
+    result = result.replace('\t', '\\t')
     return result
 
 
+def configure_windows_stdio() -> None:
+    """Configure stdout/stderr to use UTF-8 encoding on Windows."""
+    if os.name != "nt":
+        return
+    for stream in (sys.stdout, sys.stderr):
+        reconfigure = getattr(stream, "reconfigure", None)
+        if callable(reconfigure):
+            try:
+                reconfigure(encoding="utf-8")
+            except (ValueError, OSError):
+                pass
+
+
 def main():
-    parser = argparse.ArgumentParser(
-        description='Codex Bridge - Delegate tasks to Codex CLI'
-    )
+    configure_windows_stdio()
+    parser = argparse.ArgumentParser(description="Codex Bridge - Delegate tasks to Codex CLI")
     parser.add_argument(
-        '--PROMPT',
+        "--PROMPT",
         required=True,
-        help='Task prompt for Codex'
+        help="Instruction for the task to send to codex."
     )
     parser.add_argument(
-        '--cd',
+        "--cd",
         required=True,
-        help='Working directory'
+        help="Set the workspace root for codex before executing the task."
     )
     parser.add_argument(
-        '--sandbox',
-        default='read-only',
-        choices=['read-only', 'workspace-write', 'danger-full-access'],
-        help='Sandbox security level'
+        "--sandbox",
+        default="read-only",
+        choices=["read-only", "workspace-write", "danger-full-access"],
+        help="Sandbox policy for model-generated commands. Defaults to `read-only`."
     )
     parser.add_argument(
-        '--SESSION_ID',
-        help='Resume existing session'
+        "--SESSION_ID",
+        default="",
+        help="Resume the specified session of the codex. Defaults to empty, start a new session."
     )
     parser.add_argument(
-        '--image',
-        help='Image attachment path'
+        "--skip-git-repo-check",
+        action="store_true",
+        default=True,
+        help="Allow codex running outside a Git repository."
     )
     parser.add_argument(
-        '--model',
-        help='Model override'
+        "--return-all-messages",
+        action="store_true",
+        help="Return all messages from the codex session."
     )
     parser.add_argument(
-        '--profile',
-        help='Profile name'
+        "--image",
+        action="append",
+        default=[],
+        help="Attach image files to the prompt. Can be repeated."
     )
     parser.add_argument(
-        '--return-all-messages',
-        action='store_true',
-        help='Include all messages in response'
+        "--model",
+        default="",
+        help="Model override. Only use when explicitly specified by user."
     )
     parser.add_argument(
-        '--yolo',
-        action='store_true',
-        help='Bypass approval prompts'
+        "--yolo",
+        action="store_true",
+        help="Run without approvals or sandboxing."
+    )
+    parser.add_argument(
+        "--profile",
+        default="",
+        help="Configuration profile name."
     )
 
     args = parser.parse_args()
 
     # Validate working directory
-    if not os.path.isdir(args.cd):
-        print(json.dumps({
-            'success': False,
-            'error': f'Directory not found: {args.cd}'
-        }))
+    cd_path = Path(args.cd)
+    if not cd_path.exists():
+        result = {
+            "success": False,
+            "error": f"Directory not found: {cd_path.absolute()}"
+        }
+        print(json.dumps(result, indent=2, ensure_ascii=False))
         sys.exit(1)
 
-    # Build codex command
-    cmd = ['codex']
-
-    # Map sandbox levels
-    sandbox_map = {
-        'read-only': 'sandbox',
-        'workspace-write': 'workspace',
-        'danger-full-access': 'full-auto'
-    }
-    approval = sandbox_map.get(args.sandbox, 'sandbox')
-    cmd.extend(['--approval', approval])
-
-    # Add prompt
-    cmd.extend(['--prompt', args.PROMPT])
-
-    # Add optional arguments
-    if args.SESSION_ID:
-        cmd.extend(['--thread-id', args.SESSION_ID])
+    # Build codex command using the correct syntax: codex exec --sandbox X --cd Y --json [resume SESSION_ID] -- PROMPT
+    cmd = ["codex", "exec", "--sandbox", args.sandbox, "--cd", str(cd_path.absolute()), "--json"]
 
     if args.image:
-        cmd.extend(['--image', args.image])
+        cmd.extend(["--image", ",".join(args.image)])
 
     if args.model:
-        cmd.extend(['--model', args.model])
+        cmd.extend(["--model", args.model])
 
     if args.profile:
-        cmd.extend(['--profile', args.profile])
+        cmd.extend(["--profile", args.profile])
 
     if args.yolo:
-        cmd.append('--yolo')
+        cmd.append("--yolo")
 
-    # Execute
-    result = run_shell_command(cmd, cwd=args.cd)
+    if args.skip_git_repo_check:
+        cmd.append("--skip-git-repo-check")
 
-    # Format output
-    output = {
-        'success': result['success'],
-        'SESSION_ID': result['SESSION_ID'],
-        'agent_messages': result['agent_messages'],
-    }
+    if args.SESSION_ID:
+        cmd.extend(["resume", args.SESSION_ID])
+
+    PROMPT = args.PROMPT
+    if os.name == "nt":
+        PROMPT = windows_escape(PROMPT)
+
+    cmd += ["--", PROMPT]
+
+    # Execute and parse output
+    all_messages = []
+    agent_messages = ""
+    success = True
+    err_message = ""
+    thread_id = None
+
+    for line in run_shell_command(cmd, cwd=str(cd_path.absolute())):
+        try:
+            line_dict = json.loads(line.strip())
+            all_messages.append(line_dict)
+            item = line_dict.get("item", {})
+            item_type = item.get("type", "")
+
+            if item_type == "agent_message":
+                agent_messages = agent_messages + item.get("text", "")
+
+            if line_dict.get("thread_id") is not None:
+                thread_id = line_dict.get("thread_id")
+
+            if "fail" in line_dict.get("type", ""):
+                success = False if len(agent_messages) == 0 else success
+                err_message += "\n\n[codex error] " + line_dict.get("error", {}).get("message", "")
+
+            if "error" in line_dict.get("type", ""):
+                error_msg = line_dict.get("message", "")
+                # Ignore reconnection messages
+                is_reconnecting = bool(re.match(r'^Reconnecting\.\.\.\s+\d+/\d+$', error_msg))
+                if not is_reconnecting:
+                    success = False if len(agent_messages) == 0 else success
+                    err_message += "\n\n[codex error] " + error_msg
+
+        except json.JSONDecodeError:
+            err_message += "\n\n[json decode error] " + line
+            continue
+        except Exception as error:
+            err_message += f"\n\n[unexpected error] {error}. Line: {line!r}"
+            success = False
+            break
+
+    if thread_id is None:
+        success = False
+        err_message = "Failed to get `SESSION_ID` from the codex session.\n\n" + err_message
+
+    if len(agent_messages) == 0:
+        success = False
+        err_message = "Failed to get `agent_messages` from the codex session. Try setting `return_all_messages` to True.\n\n" + err_message
+
+    if success:
+        result = {
+            "success": True,
+            "SESSION_ID": thread_id,
+            "agent_messages": agent_messages,
+        }
+    else:
+        result = {"success": False, "error": err_message}
 
     if args.return_all_messages:
-        output['all_messages'] = result['all_messages']
+        result["all_messages"] = all_messages
 
-    if result['error']:
-        output['error'] = result['error']
-
-    print(json.dumps(output, indent=2))
+    print(json.dumps(result, indent=2, ensure_ascii=False))
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

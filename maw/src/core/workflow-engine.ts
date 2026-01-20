@@ -686,6 +686,168 @@ Session history: ${session.sharedContext.taskHistory.length} tasks completed
       },
     };
   }
+
+  /**
+   * New: 5-Phase Collaboration Workflow (from GuDaStudio/skills pattern)
+   *
+   * Phase 1: Context Retrieval - Use CodexLens to find relevant code
+   * Phase 2: Multi-Model Analysis - Parallel analysis by Codex and Gemini
+   * Phase 3: Prototype Generation - External AIs generate unified diff patches (read-only)
+   * Phase 4: Implementation - Claude refactors and applies changes
+   * Phase 5: Audit - Code quality, security, and test coverage review
+   */
+  static createFivePhaseWorkflow(task: string): WorkflowDefinition {
+    return {
+      name: 'five-phase',
+      level: 'collaborate',
+      description: 'Skills-pattern 5-phase collaboration: Context → Analysis → Prototype → Implement → Audit',
+      phases: [
+        // Phase 1: Context Retrieval
+        {
+          id: 'context',
+          name: 'Context Retrieval',
+          type: 'planning',
+          assignedAI: 'claude',
+          inputs: ['task'],
+          outputs: ['relevant-files', 'codebase-context'],
+          config: {
+            useCodexLens: true,
+            prompt: `Analyze the task and identify relevant files and code context:
+Task: ${task}
+
+Use CodexLens or file search to find:
+1. Files directly related to the task
+2. Dependencies and imports
+3. Test files that may need updates
+4. Configuration files
+
+Output a list of relevant file paths and key code snippets.`,
+          },
+        },
+        // Phase 2: Multi-Model Analysis (Parallel)
+        {
+          id: 'analysis-codex',
+          name: 'Codex Analysis',
+          type: 'delegation',
+          assignedAI: 'codex',
+          inputs: ['task', 'relevant-files'],
+          outputs: ['codex-analysis'],
+          config: {
+            prompt: `Analyze this task from a backend/algorithm perspective:
+${task}
+
+Provide:
+1. Technical approach recommendation
+2. Potential edge cases
+3. Performance considerations
+4. Suggested implementation pattern`,
+          },
+        },
+        {
+          id: 'analysis-gemini',
+          name: 'Gemini Analysis',
+          type: 'delegation',
+          assignedAI: 'gemini',
+          inputs: ['task', 'relevant-files'],
+          outputs: ['gemini-analysis'],
+          config: {
+            prompt: `Analyze this task from a UX/documentation perspective:
+${task}
+
+Provide:
+1. User experience considerations
+2. API design suggestions
+3. Documentation requirements
+4. Integration points`,
+          },
+        },
+        // Phase 3: Prototype Generation (Read-only, unified diff)
+        {
+          id: 'prototype',
+          name: 'Prototype Generation',
+          type: 'delegation',
+          assignedAI: 'codex',
+          inputs: ['codex-analysis', 'gemini-analysis', 'relevant-files'],
+          outputs: ['prototype-diff'],
+          config: {
+            sandbox: 'read-only', // Critical: External AIs cannot write files
+            prompt: `Based on the analysis, generate a unified diff patch for the implementation.
+
+IMPORTANT: Output ONLY unified diff format. Do not modify files directly.
+
+Format:
+--- a/path/to/file.ts
++++ b/path/to/file.ts
+@@ -line,count +line,count @@
+ context line
+-removed line
++added line
+
+Generate the minimal diff needed to implement the task.`,
+          },
+        },
+        // Phase 4: Implementation (Claude applies changes)
+        {
+          id: 'implement',
+          name: 'Claude Implementation',
+          type: 'execution',
+          assignedAI: 'claude',
+          inputs: ['prototype-diff', 'relevant-files'],
+          outputs: ['implementation'],
+          config: {
+            prompt: `Review and apply the prototype diff with improvements:
+
+1. Validate the diff is safe and correct
+2. Apply necessary refinements
+3. Ensure code style consistency
+4. Add error handling where needed
+5. Update related files (tests, docs) as needed`,
+          },
+        },
+        // Phase 5: Audit
+        {
+          id: 'audit',
+          name: 'Security & Quality Audit',
+          type: 'review',
+          assignedAI: 'claude',
+          inputs: ['implementation'],
+          outputs: ['audit-report', 'final-code'],
+          config: {
+            prompt: `Perform a comprehensive audit:
+
+1. Security Review:
+   - Check for injection vulnerabilities
+   - Validate input sanitization
+   - Review authentication/authorization
+
+2. Code Quality:
+   - Verify best practices
+   - Check error handling
+   - Review naming conventions
+
+3. Test Coverage:
+   - Verify tests exist for new code
+   - Check edge cases are covered
+   - Validate test assertions
+
+4. Performance:
+   - Identify potential bottlenecks
+   - Review resource usage
+   - Check for memory leaks`,
+          },
+        },
+      ],
+      aiAssignment: {
+        planner: 'claude',
+        executors: ['codex', 'gemini'],
+        reviewers: ['claude'],
+      },
+      parallelConfig: {
+        maxConcurrency: 2,
+        dependencyAware: true,
+      },
+    };
+  }
 }
 
 export default WorkflowEngine;

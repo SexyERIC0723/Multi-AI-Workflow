@@ -321,18 +321,250 @@ function createSession() {
 }
 
 function viewSession(id) {
-  // TODO: Implement session detail view
-  console.log('View session:', id);
+  // Load and display session details
+  openModal('Session Details', '<p class="loading">Loading...</p>', null);
+
+  apiGet(`/sessions/${id}/details`)
+    .then(data => {
+      const { session, aiSessions, workflows, aiLogs } = data;
+
+      const aiSessionsHtml = Object.entries(aiSessions || {})
+        .filter(([_, v]) => v)
+        .map(([ai, sessionId]) => `
+          <div class="detail-item">
+            <span class="detail-label">${ai}:</span>
+            <code class="session-id">${sessionId}</code>
+          </div>
+        `)
+        .join('') || '<p class="placeholder">No AI sessions linked</p>';
+
+      const workflowsHtml = workflows?.length ? workflows.slice(0, 5).map(w => `
+        <div class="mini-item">
+          <span class="data-item-status ${w.status}">${w.status}</span>
+          <span class="mini-title">${escapeHtml(w.task.substring(0, 40))}${w.task.length > 40 ? '...' : ''}</span>
+        </div>
+      `).join('') : '<p class="placeholder">No workflows</p>';
+
+      document.getElementById('modal-body').innerHTML = `
+        <div class="detail-section">
+          <h4>Session Info</h4>
+          <div class="detail-item">
+            <span class="detail-label">ID:</span>
+            <code>${session.id}</code>
+          </div>
+          <div class="detail-item">
+            <span class="detail-label">Name:</span>
+            <span>${escapeHtml(session.name)}</span>
+          </div>
+          <div class="detail-item">
+            <span class="detail-label">Status:</span>
+            <span class="data-item-status ${session.status}">${session.status}</span>
+          </div>
+          <div class="detail-item">
+            <span class="detail-label">Level:</span>
+            <span>${session.workflowLevel || 'plan'}</span>
+          </div>
+          <div class="detail-item">
+            <span class="detail-label">Created:</span>
+            <span>${formatTime(session.createdAt)}</span>
+          </div>
+        </div>
+
+        <div class="detail-section">
+          <h4>Linked AI Sessions</h4>
+          ${aiSessionsHtml}
+        </div>
+
+        <div class="detail-section">
+          <h4>Recent Workflows</h4>
+          ${workflowsHtml}
+        </div>
+
+        <div class="detail-actions">
+          <button class="btn btn-danger" onclick="deleteSession('${session.id}')">Delete Session</button>
+        </div>
+      `;
+
+      // Hide confirm button for view-only modal
+      document.getElementById('modal-confirm').style.display = 'none';
+    })
+    .catch(error => {
+      document.getElementById('modal-body').innerHTML = `
+        <p class="error">Failed to load session: ${error.message}</p>
+      `;
+    });
 }
 
 function viewWorkflow(id) {
-  // TODO: Implement workflow detail view
-  console.log('View workflow:', id);
+  openModal('Workflow Details', '<p class="loading">Loading...</p>', null);
+
+  apiGet(`/workflows/${id}`)
+    .then(workflow => {
+      document.getElementById('modal-body').innerHTML = `
+        <div class="detail-section">
+          <h4>Workflow Info</h4>
+          <div class="detail-item">
+            <span class="detail-label">ID:</span>
+            <code>${workflow.id}</code>
+          </div>
+          <div class="detail-item">
+            <span class="detail-label">Level:</span>
+            <span class="level-badge">${workflow.level}</span>
+          </div>
+          <div class="detail-item">
+            <span class="detail-label">Status:</span>
+            <span class="data-item-status ${workflow.status}">${workflow.status}</span>
+          </div>
+          <div class="detail-item">
+            <span class="detail-label">Started:</span>
+            <span>${formatTime(workflow.startedAt)}</span>
+          </div>
+          ${workflow.completedAt ? `
+          <div class="detail-item">
+            <span class="detail-label">Completed:</span>
+            <span>${formatTime(workflow.completedAt)}</span>
+          </div>
+          ` : ''}
+        </div>
+
+        <div class="detail-section">
+          <h4>Task</h4>
+          <pre class="code-block">${escapeHtml(workflow.task)}</pre>
+        </div>
+
+        ${workflow.result ? `
+        <div class="detail-section">
+          <h4>Result</h4>
+          <pre class="code-block">${escapeHtml(workflow.result)}</pre>
+        </div>
+        ` : ''}
+
+        ${workflow.error ? `
+        <div class="detail-section">
+          <h4>Error</h4>
+          <pre class="code-block error">${escapeHtml(workflow.error)}</pre>
+        </div>
+        ` : ''}
+      `;
+
+      document.getElementById('modal-confirm').style.display = 'none';
+    })
+    .catch(error => {
+      document.getElementById('modal-body').innerHTML = `
+        <p class="error">Failed to load workflow: ${error.message}</p>
+      `;
+    });
 }
 
 function viewAILog(id) {
-  // TODO: Implement AI log detail view
-  console.log('View AI log:', id);
+  openModal('AI Log Details', '<p class="loading">Loading...</p>', null);
+
+  apiGet(`/ai-logs/${id}`)
+    .then(log => {
+      document.getElementById('modal-body').innerHTML = `
+        <div class="detail-section">
+          <h4>Execution Info</h4>
+          <div class="detail-item">
+            <span class="detail-label">Provider:</span>
+            <span class="ai-provider-badge">${log.aiProvider}</span>
+          </div>
+          <div class="detail-item">
+            <span class="detail-label">Status:</span>
+            <span class="data-item-status ${log.status}">${log.status}</span>
+          </div>
+          <div class="detail-item">
+            <span class="detail-label">Started:</span>
+            <span>${formatTime(log.startedAt)}</span>
+          </div>
+          ${log.tokensUsed ? `
+          <div class="detail-item">
+            <span class="detail-label">Tokens:</span>
+            <span>${log.tokensUsed}</span>
+          </div>
+          ` : ''}
+        </div>
+
+        <div class="detail-section">
+          <h4>Prompt</h4>
+          <pre class="code-block">${escapeHtml(log.prompt)}</pre>
+        </div>
+
+        ${log.response ? `
+        <div class="detail-section">
+          <h4>Response</h4>
+          <pre class="code-block">${escapeHtml(log.response.substring(0, 2000))}${log.response.length > 2000 ? '\n...(truncated)' : ''}</pre>
+        </div>
+        ` : ''}
+
+        ${log.error ? `
+        <div class="detail-section">
+          <h4>Error</h4>
+          <pre class="code-block error">${escapeHtml(log.error)}</pre>
+        </div>
+        ` : ''}
+      `;
+
+      document.getElementById('modal-confirm').style.display = 'none';
+    })
+    .catch(error => {
+      document.getElementById('modal-body').innerHTML = `
+        <p class="error">Failed to load AI log: ${error.message}</p>
+      `;
+    });
+}
+
+async function deleteSession(id) {
+  if (!confirm('Are you sure you want to delete this session?')) return;
+
+  try {
+    await apiDelete(`/sessions/${id}`);
+    closeModal();
+    loadSessions();
+    loadStats();
+  } catch (error) {
+    alert('Failed to delete session: ' + error.message);
+  }
+}
+
+async function loadSkills() {
+  try {
+    const data = await apiGet('/skills');
+    const container = document.getElementById('skills-list');
+
+    if (data.skills.length === 0) {
+      container.innerHTML = `
+        <div class="empty-state">
+          <p>No skills installed</p>
+          <p class="hint">Install skills using: <code>maw skill install &lt;source&gt;</code></p>
+        </div>
+      `;
+    } else {
+      container.innerHTML = data.skills.map(skill => `
+        <div class="data-item skill-item">
+          <div class="data-item-main">
+            <div class="data-item-title">
+              <span class="skill-type-badge ${skill.type}">${skill.type}</span>
+              ${escapeHtml(skill.name)}
+            </div>
+            <div class="data-item-subtitle">${escapeHtml(skill.description || 'No description')}</div>
+            ${skill.bridge ? `
+            <div class="skill-bridge">
+              Target AI: <span class="ai-provider-badge">${skill.bridge.targetAI}</span>
+            </div>
+            ` : ''}
+          </div>
+          <div class="data-item-meta">
+            <div class="skill-version">v${skill.version}</div>
+            <span class="data-item-status ${skill.enabled ? 'active' : 'paused'}">${skill.enabled ? 'Enabled' : 'Disabled'}</span>
+          </div>
+        </div>
+      `).join('');
+    }
+  } catch (error) {
+    console.error('Failed to load skills:', error);
+    document.getElementById('skills-list').innerHTML =
+      '<p class="placeholder">Failed to load skills</p>';
+  }
 }
 
 async function performSearch() {
@@ -381,6 +613,9 @@ function switchView(viewId) {
       break;
     case 'ai-logs':
       loadAILogs();
+      break;
+    case 'skills':
+      loadSkills();
       break;
   }
 }

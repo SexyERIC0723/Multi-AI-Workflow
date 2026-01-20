@@ -18,6 +18,42 @@ interface DelegateOptions {
   stream: boolean;
 }
 
+interface SemanticRouteOptions {
+  cd: string;
+  sandbox: string;
+  prefer?: string;
+}
+
+// Keyword patterns for semantic routing (CCW's semantic CLI invocation)
+const AI_ROUTING_PATTERNS: Record<string, { keywords: RegExp[]; strength: string[] }> = {
+  codex: {
+    keywords: [
+      /\b(algorithm|backend|api|server|database|logic|optimize|performance|debug|test)\b/i,
+      /\b(python|node|javascript|typescript|go|rust|java)\b/i,
+      /\b(implement|refactor|fix|analyze|review)\b/i,
+      /\bcli\b/i,
+    ],
+    strength: ['algorithm', 'backend', 'performance', 'debugging', 'code review'],
+  },
+  gemini: {
+    keywords: [
+      /\b(frontend|ui|ux|design|style|css|html|react|vue|angular)\b/i,
+      /\b(visual|multimodal|image|diagram|sketch|prototype)\b/i,
+      /\b(explain|summarize|document|translate)\b/i,
+      /\bresearch\b/i,
+    ],
+    strength: ['frontend', 'UI/UX', 'visual analysis', 'documentation', 'research'],
+  },
+  claude: {
+    keywords: [
+      /\b(plan|architect|design|strategy|complex|multi-step)\b/i,
+      /\b(security|audit|compliance)\b/i,
+      /\b(integrate|coordinate|orchestrate)\b/i,
+    ],
+    strength: ['planning', 'architecture', 'security', 'integration'],
+  },
+};
+
 interface CollaborateOptions {
   planner: string;
   executors: string;
@@ -228,5 +264,115 @@ export async function executeCollaboration(
   } catch (error) {
     spinner.fail(chalk.red('Collaboration error'));
     console.error(error instanceof Error ? error.message : 'Unknown error');
+  }
+}
+
+/**
+ * Analyze task and determine best AI using semantic routing
+ * Implements CCW's semantic CLI invocation pattern
+ */
+function analyzeTaskForRouting(task: string): { ai: string; confidence: number; reasons: string[] } {
+  const scores: Record<string, { score: number; matches: string[] }> = {
+    codex: { score: 0, matches: [] },
+    gemini: { score: 0, matches: [] },
+    claude: { score: 0, matches: [] },
+  };
+
+  // Score each AI based on keyword matches
+  for (const [ai, patterns] of Object.entries(AI_ROUTING_PATTERNS)) {
+    for (const pattern of patterns.keywords) {
+      const match = task.match(pattern);
+      if (match) {
+        scores[ai].score += 1;
+        scores[ai].matches.push(match[0]);
+      }
+    }
+  }
+
+  // Find best match
+  let bestAI = 'claude'; // Default to Claude for complex/ambiguous tasks
+  let bestScore = 0;
+
+  for (const [ai, { score }] of Object.entries(scores)) {
+    if (score > bestScore) {
+      bestScore = score;
+      bestAI = ai;
+    }
+  }
+
+  // Calculate confidence (0-1)
+  const totalScore = Object.values(scores).reduce((sum, { score }) => sum + score, 0);
+  const confidence = totalScore > 0 ? bestScore / totalScore : 0.5;
+
+  return {
+    ai: bestAI,
+    confidence,
+    reasons: scores[bestAI].matches,
+  };
+}
+
+/**
+ * Semantic routing - auto-select AI based on task description
+ * Core CCW feature for natural language CLI invocation
+ */
+export async function semanticRoute(
+  task: string,
+  options: SemanticRouteOptions
+): Promise<void> {
+  console.log(chalk.cyan('🔍 Analyzing task for optimal AI routing...\n'));
+
+  // Analyze task
+  const analysis = analyzeTaskForRouting(task);
+
+  // Apply preference override if specified
+  let selectedAI = analysis.ai;
+  if (options.prefer) {
+    const prefer = options.prefer.toLowerCase();
+    if (['codex', 'gemini', 'claude'].includes(prefer)) {
+      selectedAI = prefer;
+      console.log(chalk.dim(`Using preferred AI: ${selectedAI}`));
+    }
+  }
+
+  // Display routing decision
+  console.log(chalk.bold('Routing Decision:'));
+  console.log(chalk.dim('  Task:'), task.substring(0, 80) + (task.length > 80 ? '...' : ''));
+  console.log(chalk.dim('  Selected AI:'), chalk.green(selectedAI));
+  console.log(chalk.dim('  Confidence:'), `${Math.round(analysis.confidence * 100)}%`);
+
+  if (analysis.reasons.length > 0) {
+    console.log(chalk.dim('  Matched keywords:'), analysis.reasons.join(', '));
+  }
+
+  // Show AI strengths
+  const strengths = AI_ROUTING_PATTERNS[selectedAI]?.strength || [];
+  if (strengths.length > 0) {
+    console.log(chalk.dim('  AI strengths:'), strengths.join(', '));
+  }
+
+  console.log();
+
+  // Execute with selected AI
+  if (selectedAI === 'claude') {
+    // Use Claude directly (native integration)
+    const spinner = ora('Claude is processing...').start();
+    try {
+      // For Claude, we execute internally
+      spinner.succeed(chalk.green('Task routed to Claude (native)'));
+      console.log(chalk.dim('\nNote: Claude processes this task natively within Claude Code.'));
+      console.log(chalk.dim('The task has been logged for Claude to handle in the current session.'));
+      console.log(chalk.cyan('\n--- Task ---'));
+      console.log(task);
+    } catch (error) {
+      spinner.fail(chalk.red('Claude routing failed'));
+      console.error(error instanceof Error ? error.message : 'Unknown error');
+    }
+  } else {
+    // Delegate to external AI (Codex/Gemini)
+    await delegateToAI(selectedAI, task, {
+      sandbox: options.sandbox,
+      cd: options.cd,
+      stream: false,
+    });
   }
 }

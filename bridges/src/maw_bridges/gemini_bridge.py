@@ -2,8 +2,8 @@
 """
 Gemini Bridge - Python wrapper for Gemini CLI
 
-Provides JSON-based interface for Claude to delegate tasks to Gemini.
 Based on GuDaStudio/skills collaborating-with-gemini implementation.
+Provides JSON-based interface for Claude to delegate tasks to Gemini.
 
 Usage:
     python gemini_bridge.py --PROMPT "task" --cd "/path" [options]
@@ -16,203 +16,311 @@ Returns JSON:
     }
 """
 
-import argparse
 import json
 import os
-import platform
-import subprocess
 import sys
+import queue
+import subprocess
 import threading
-from typing import Dict, List, Optional, Any
+import time
+import shutil
+import argparse
+from pathlib import Path
+from typing import Generator, List, Optional
 
 
-def _get_windows_npm_paths() -> List[str]:
-    """Get potential npm installation paths on Windows."""
-    paths = []
-
-    npm_prefix = os.environ.get('NPM_CONFIG_PREFIX')
-    if npm_prefix:
-        paths.append(npm_prefix)
-
-    appdata = os.environ.get('APPDATA')
-    if appdata:
-        paths.append(os.path.join(appdata, 'npm'))
-
+def _get_windows_npm_paths() -> List[Path]:
+    """Return candidate directories for npm global installs on Windows."""
+    if os.name != "nt":
+        return []
+    paths: List[Path] = []
+    env = os.environ
+    if prefix := env.get("NPM_CONFIG_PREFIX") or env.get("npm_config_prefix"):
+        paths.append(Path(prefix))
+    if appdata := env.get("APPDATA"):
+        paths.append(Path(appdata) / "npm")
+    if localappdata := env.get("LOCALAPPDATA"):
+        paths.append(Path(localappdata) / "npm")
+    if programfiles := env.get("ProgramFiles"):
+        paths.append(Path(programfiles) / "nodejs")
     return paths
 
 
-def _augment_path_env(env: Dict[str, str], npm_paths: List[str]) -> Dict[str, str]:
-    """Add npm paths to PATH environment variable."""
-    current_path = env.get('PATH', '')
-    new_paths = [p for p in npm_paths if os.path.exists(p)]
+def _augment_path_env(env: dict) -> None:
+    """Prepend npm global directories to PATH if missing."""
+    if os.name != "nt":
+        return
+    path_key = next((k for k in env if k.upper() == "PATH"), "PATH")
+    path_entries = [p for p in env.get(path_key, "").split(os.pathsep) if p]
+    lower_set = {p.lower() for p in path_entries}
+    for candidate in _get_windows_npm_paths():
+        if candidate.is_dir() and str(candidate).lower() not in lower_set:
+            path_entries.insert(0, str(candidate))
+            lower_set.add(str(candidate).lower())
+    env[path_key] = os.pathsep.join(path_entries)
 
-    if new_paths:
-        env['PATH'] = os.pathsep.join(new_paths + [current_path])
 
-    return env
+def _resolve_executable(name: str, env: dict) -> str:
+    """Resolve executable path, checking npm directories for .cmd/.bat on Windows."""
+    if os.path.isabs(name) or os.sep in name or (os.altsep and os.altsep in name):
+        return name
+    path_key = next((k for k in env if k.upper() == "PATH"), "PATH")
+    path_val = env.get(path_key)
+    win_exts = {".exe", ".cmd", ".bat", ".com"}
+    if resolved := shutil.which(name, path=path_val):
+        if os.name == "nt":
+            suffix = Path(resolved).suffix.lower()
+            if not suffix:
+                resolved_dir = str(Path(resolved).parent)
+                for ext in (".cmd", ".bat", ".exe", ".com"):
+                    candidate = Path(resolved_dir) / f"{name}{ext}"
+                    if candidate.is_file():
+                        return str(candidate)
+            elif suffix not in win_exts:
+                return resolved
+        return resolved
+    if os.name == "nt":
+        for base in _get_windows_npm_paths():
+            for ext in (".cmd", ".bat", ".exe", ".com"):
+                candidate = base / f"{name}{ext}"
+                if candidate.is_file():
+                    return str(candidate)
+    return name
 
 
-def run_shell_command(
-    cmd: List[str],
-    cwd: Optional[str] = None,
-    env: Optional[Dict[str, str]] = None,
-    timeout: int = 300
-) -> Dict[str, Any]:
-    """
-    Execute shell command and capture output.
-    """
-    if env is None:
-        env = os.environ.copy()
+def run_shell_command(cmd: List[str], cwd: Optional[str] = None) -> Generator[str, None, None]:
+    """Execute a command and stream its output line-by-line."""
+    env = os.environ.copy()
+    _augment_path_env(env)
 
-    # Add npm paths on Windows
-    if platform.system() == 'Windows':
-        npm_paths = _get_windows_npm_paths()
-        env = _augment_path_env(env, npm_paths)
+    popen_cmd = cmd.copy()
+    exe_path = _resolve_executable(cmd[0], env)
+    popen_cmd[0] = exe_path
 
-    result = {
-        'success': False,
-        'SESSION_ID': None,
-        'agent_messages': '',
-        'all_messages': [],
-        'error': None
-    }
+    # Windows .cmd/.bat files need cmd.exe wrapper (avoid shell=True for security)
+    if os.name == "nt" and Path(exe_path).suffix.lower() in {".cmd", ".bat"}:
+        def _cmd_quote(arg: str) -> str:
+            if not arg:
+                return '""'
+            arg = arg.replace('%', '%%')
+            arg = arg.replace('^', '^^')
+            if any(c in arg for c in '&|<>()^" \t'):
+                escaped = arg.replace('"', '"^""')
+                return f'"{escaped}"'
+            return arg
+        cmdline = " ".join(_cmd_quote(a) for a in popen_cmd)
+        comspec = env.get("COMSPEC", "cmd.exe")
+        popen_cmd = f'"{comspec}" /d /s /c "{cmdline}"'
+
+    process = subprocess.Popen(
+        popen_cmd,
+        shell=False,
+        stdin=subprocess.DEVNULL,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        universal_newlines=True,
+        encoding='utf-8',
+        errors='replace',
+        cwd=cwd,
+        env=env,
+    )
+
+    output_queue: "queue.Queue[Optional[str]]" = queue.Queue()
+    GRACEFUL_SHUTDOWN_DELAY = 0.3
+
+    def is_turn_completed(line: str) -> bool:
+        try:
+            data = json.loads(line)
+            return data.get("type") == "turn.completed"
+        except (json.JSONDecodeError, AttributeError, TypeError):
+            return False
+
+    def read_output() -> None:
+        if process.stdout:
+            for line in iter(process.stdout.readline, ""):
+                stripped = line.strip()
+                output_queue.put(stripped)
+                if is_turn_completed(stripped):
+                    time.sleep(GRACEFUL_SHUTDOWN_DELAY)
+                    process.terminate()
+                    break
+            process.stdout.close()
+        output_queue.put(None)
+
+    thread = threading.Thread(target=read_output)
+    thread.start()
+
+    while True:
+        try:
+            line = output_queue.get(timeout=0.5)
+            if line is None:
+                break
+            yield line
+        except queue.Empty:
+            if process.poll() is not None and not thread.is_alive():
+                break
 
     try:
-        proc = subprocess.Popen(
-            cmd,
-            cwd=cwd,
-            env=env,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.STDOUT,
-            text=True,
-            bufsize=1
-        )
-
-        output_lines = []
-
-        def read_output():
-            for line in proc.stdout:
-                output_lines.append(line.rstrip())
-
-        reader = threading.Thread(target=read_output)
-        reader.daemon = True
-        reader.start()
-        reader.join(timeout=timeout)
-
-        proc.wait(timeout=5)
-
-        # Parse output
-        agent_messages = []
-        session_id = None
-
-        for line in output_lines:
-            try:
-                msg = json.loads(line)
-                result['all_messages'].append(msg)
-
-                # Gemini message format
-                if msg.get('type') == 'message' and msg.get('role') == 'assistant':
-                    agent_messages.append(msg.get('content', ''))
-
-                # Extract session ID
-                if 'session_id' in msg:
-                    session_id = msg['session_id']
-
-            except json.JSONDecodeError:
-                # Non-JSON output
-                if line.strip() and not line.startswith('Warning:'):
-                    agent_messages.append(line)
-
-        result['success'] = proc.returncode == 0
-        result['SESSION_ID'] = session_id
-        result['agent_messages'] = '\n'.join(agent_messages)
-
+        process.wait(timeout=5)
     except subprocess.TimeoutExpired:
-        result['error'] = f'Command timed out after {timeout}s'
-        proc.kill()
-    except Exception as e:
-        result['error'] = str(e)
+        process.kill()
+        process.wait()
+    thread.join(timeout=5)
 
+    while not output_queue.empty():
+        try:
+            line = output_queue.get_nowait()
+            if line is not None:
+                yield line
+        except queue.Empty:
+            break
+
+
+def windows_escape(prompt: str) -> str:
+    """Windows style string escaping for newlines and special chars in prompt text."""
+    result = prompt.replace('\n', '\\n')
+    result = result.replace('\r', '\\r')
+    result = result.replace('\t', '\\t')
     return result
 
 
+def configure_windows_stdio() -> None:
+    """Configure stdout/stderr to use UTF-8 encoding on Windows."""
+    if os.name != "nt":
+        return
+    for stream in (sys.stdout, sys.stderr):
+        reconfigure = getattr(stream, "reconfigure", None)
+        if callable(reconfigure):
+            try:
+                reconfigure(encoding="utf-8")
+            except (ValueError, OSError):
+                pass
+
+
 def main():
-    parser = argparse.ArgumentParser(
-        description='Gemini Bridge - Delegate tasks to Gemini CLI'
-    )
+    configure_windows_stdio()
+    parser = argparse.ArgumentParser(description="Gemini Bridge - Delegate tasks to Gemini CLI")
     parser.add_argument(
-        '--PROMPT',
+        "--PROMPT",
         required=True,
-        help='Task prompt for Gemini'
+        help="Instruction for the task to send to gemini."
     )
     parser.add_argument(
-        '--cd',
+        "--cd",
         required=True,
-        help='Working directory'
+        type=Path,
+        help="Set the workspace root for gemini before executing the task."
     )
     parser.add_argument(
-        '--SESSION_ID',
-        help='Resume existing session'
+        "--sandbox",
+        action="store_true",
+        default=False,
+        help="Run in sandbox mode. Defaults to False."
     )
     parser.add_argument(
-        '--sandbox',
-        action='store_true',
-        help='Run in sandbox mode'
+        "--SESSION_ID",
+        default="",
+        help="Resume the specified session of the gemini. Defaults to empty, start a new session."
     )
     parser.add_argument(
-        '--model',
-        help='Model override'
+        "--return-all-messages",
+        action="store_true",
+        help="Return all messages from the gemini session."
     )
     parser.add_argument(
-        '--return-all-messages',
-        action='store_true',
-        help='Include all messages in response'
+        "--model",
+        default="",
+        help="Model override. Only use when explicitly specified by user."
     )
 
     args = parser.parse_args()
 
-    # Validate working directory
-    if not os.path.isdir(args.cd):
-        print(json.dumps({
-            'success': False,
-            'error': f'Directory not found: {args.cd}'
-        }))
-        sys.exit(1)
+    cd: Path = args.cd
+    if not cd.exists():
+        result = {
+            "success": False,
+            "error": f"The workspace root directory `{cd.absolute()}` does not exist."
+        }
+        print(json.dumps(result, indent=2, ensure_ascii=False))
+        return
 
-    # Build gemini command
-    cmd = ['gemini']
+    PROMPT = args.PROMPT
+    if os.name == "nt":
+        PROMPT = windows_escape(PROMPT)
 
-    # Add prompt (gemini uses different syntax)
-    cmd.extend(['prompt', args.PROMPT])
-
-    # Add optional arguments
-    if args.SESSION_ID:
-        cmd.extend(['--resume', args.SESSION_ID])
+    # Build gemini command: gemini --prompt PROMPT -o stream-json [options]
+    cmd = ["gemini", "--prompt", PROMPT, "-o", "stream-json"]
 
     if args.sandbox:
-        cmd.append('--sandbox')
+        cmd.append("--sandbox")
 
     if args.model:
-        cmd.extend(['--model', args.model])
+        cmd.extend(["--model", args.model])
 
-    # Execute
-    result = run_shell_command(cmd, cwd=args.cd)
+    if args.SESSION_ID:
+        cmd.extend(["--resume", args.SESSION_ID])
 
-    # Format output
-    output = {
-        'success': result['success'],
-        'SESSION_ID': result['SESSION_ID'],
-        'agent_messages': result['agent_messages'],
-    }
+    all_messages = []
+    agent_messages = ""
+    success = True
+    err_message = ""
+    thread_id = None
+
+    # Deprecated prompt warning to filter out
+    DEPRECATED_WARNING = "The --prompt (-p) flag has been deprecated and will be removed in a future version."
+
+    for line in run_shell_command(cmd, cwd=str(cd.absolute())):
+        try:
+            line_dict = json.loads(line.strip())
+            all_messages.append(line_dict)
+            item_type = line_dict.get("type", "")
+            item_role = line_dict.get("role", "")
+
+            if item_type == "message" and item_role == "assistant":
+                content = line_dict.get("content", "")
+                # Filter out deprecated warning
+                if DEPRECATED_WARNING in content:
+                    continue
+                agent_messages = agent_messages + content
+
+            if line_dict.get("session_id") is not None:
+                thread_id = line_dict.get("session_id")
+
+        except json.JSONDecodeError:
+            err_message += "\n\n[json decode error] " + line
+            continue
+        except Exception as error:
+            err_message += f"\n\n[unexpected error] {error}. Line: {line!r}"
+            break
+
+    result = {}
+
+    if thread_id is None:
+        success = False
+        err_message = "Failed to get `SESSION_ID` from the gemini session.\n\n" + err_message
+    else:
+        result["SESSION_ID"] = thread_id
+
+    if success and len(agent_messages) == 0:
+        success = False
+        err_message = (
+            "Failed to retrieve `agent_messages` from the Gemini session. "
+            "This might be due to Gemini performing a tool call. "
+            "You can continue using the `SESSION_ID` to proceed.\n\n" + err_message
+        )
+
+    if success:
+        result["agent_messages"] = agent_messages
+    else:
+        result["error"] = err_message
+
+    result["success"] = success
 
     if args.return_all_messages:
-        output['all_messages'] = result['all_messages']
+        result["all_messages"] = all_messages
 
-    if result['error']:
-        output['error'] = result['error']
-
-    print(json.dumps(output, indent=2))
+    print(json.dumps(result, indent=2, ensure_ascii=False))
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

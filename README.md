@@ -71,14 +71,19 @@ Delegate tasks to the right AI for the job. Claude plans, Codex executes, Gemini
 ### Unified Sessions
 Single session ID syncs across all AI agents. Resume work seamlessly.
 
-### 4-Level Workflows
-- **Lite**: Instant execution
-- **Plan**: Standard planning
-- **TDD-Plan**: Test-driven development
-- **Brainstorm**: Multi-role ideation
+### Semantic Routing
+Auto-detect the best AI for your task based on content analysis with `maw run`.
 
 </td>
 <td width="50%">
+
+### 5-Phase Collaboration
+Professional workflow pattern:
+1. **Context** - Gather project info
+2. **Analysis** - Multi-AI analysis
+3. **Prototype** - Initial implementation
+4. **Implement** - Full implementation
+5. **Audit** - Review & verify
 
 ### Sandbox Security
 Three security levels:
@@ -86,11 +91,28 @@ Three security levels:
 - `workspace-write` - Project changes
 - `full-access` - Complete control
 
-### Python Bridges
-Robust Python wrappers for Codex and Gemini CLI integration.
+</td>
+</tr>
+<tr>
+<td width="50%">
 
-### Dashboard
-Visual workflow management and monitoring.
+### 4-Level Workflows
+- **Lite**: Instant execution
+- **Lite-Plan**: Quick planning
+- **Plan**: Standard planning
+- **TDD-Plan**: Test-driven development
+- **Brainstorm**: Multi-role ideation
+
+</td>
+<td width="50%">
+
+### Real-time Dashboard
+Visual workflow management with:
+- Session monitoring
+- Workflow tracking
+- AI execution logs
+- Skills management
+- WebSocket live updates
 
 </td>
 </tr>
@@ -105,8 +127,8 @@ Visual workflow management and monitoring.
 - Node.js >= 18.0.0
 - Python >= 3.9
 - [Claude Code](https://claude.ai) CLI installed
-- [Codex](https://openai.com/codex) CLI (optional)
-- [Gemini](https://gemini.google.com) API access (optional)
+- [Codex CLI](https://github.com/openai/codex) (optional)
+- [Gemini CLI](https://github.com/google/gemini-cli) (optional)
 
 ### Installation
 
@@ -121,6 +143,9 @@ npm install
 # Build the project
 npm run build
 
+# Install Python bridges
+pip install -e bridges/
+
 # Link globally (optional)
 npm link
 ```
@@ -131,14 +156,21 @@ npm link
 # Check available commands
 maw --help
 
+# Smart routing - auto-selects best AI
+maw run "Analyze this codebase structure"
+
 # Run a simple workflow
 maw workflow lite "Analyze this codebase"
 
-# Delegate to Codex
-maw delegate codex "Write unit tests" --cd .
+# 5-phase professional workflow
+maw workflow five-phase "Implement user authentication"
 
-# Multi-AI collaboration
-maw collaborate "Refactor authentication module"
+# Delegate to specific AI
+maw delegate codex "Write unit tests" --cd .
+maw delegate gemini "Analyze these screenshots"
+
+# Open the dashboard
+maw view
 ```
 
 ---
@@ -152,12 +184,12 @@ Multi-AI-Workflow/
 |   +-- src/
 |   |   +-- cli.ts            # Main CLI entry
 |   |   +-- commands/         # Command implementations
-|   |   |   +-- delegate.ts   # AI delegation
+|   |   |   +-- delegate.ts   # AI delegation + semantic routing
 |   |   |   +-- workflow.ts   # Workflow execution
 |   |   |   +-- session.ts    # Session management
 |   |   |   +-- ...
 |   |   +-- core/             # Core modules
-|   |   |   +-- workflow-engine.ts
+|   |   |   +-- workflow-engine.ts   # 4-level + 5-phase workflows
 |   |   |   +-- session-manager.ts
 |   |   |   +-- skill-registry.ts
 |   |   +-- adapters/         # AI adapters
@@ -165,12 +197,20 @@ Multi-AI-Workflow/
 |
 +-- bridges/                   # Python AI Bridges
 |   +-- src/maw_bridges/
-|       +-- codex_bridge.py   # Codex CLI wrapper
-|       +-- gemini_bridge.py  # Gemini API wrapper
+|       +-- codex_bridge.py   # Codex CLI wrapper (streaming)
+|       +-- gemini_bridge.py  # Gemini CLI wrapper
+|
++-- dashboard/                 # Web Dashboard
+|   +-- src/
+|   |   +-- server.ts         # Express + WebSocket server
+|   |   +-- storage.ts        # SQLite database
+|   |   +-- maw-bridge.ts     # CLI data integration
+|   |   +-- routes/api.ts     # REST API endpoints
+|   +-- public/               # Frontend SPA
 |
 +-- codex-lens/               # Code search & indexing
-+-- dashboard/                # Web dashboard
-+-- .maw/                     # Configuration
++-- .maw/                     # Configuration & skills
+    +-- skills/               # Installed skills
 ```
 
 ---
@@ -182,15 +222,30 @@ Multi-AI-Workflow/
 | Command | Description | Example |
 |---------|-------------|---------|
 | `workflow lite <task>` | Instant execution | `maw workflow lite "Fix typos"` |
+| `workflow lite-plan <task>` | Quick plan + execute | `maw workflow lite-plan "Add logging"` |
 | `workflow plan <task>` | Standard planning | `maw workflow plan "Add auth"` |
+| `workflow tdd-plan <task>` | Test-driven development | `maw workflow tdd-plan "Add API endpoint"` |
 | `workflow brainstorm <topic>` | Multi-role ideation | `maw workflow brainstorm "API design"` |
+| `workflow five-phase <task>` | 5-phase collaboration | `maw workflow five-phase "Refactor auth"` |
+
+### Smart Routing
+
+| Command | Description | Example |
+|---------|-------------|---------|
+| `run <task>` | Auto-select best AI | `maw run "Write unit tests"` |
+
+The `run` command analyzes your task and routes it to:
+- **Codex**: Code execution, tests, debugging
+- **Gemini**: Image analysis, documentation review
+- **Claude**: Planning, reasoning, architecture
 
 ### Delegation Commands
 
 | Command | Description | Example |
 |---------|-------------|---------|
-| `delegate <ai> <task>` | Delegate to AI | `maw delegate codex "Write tests"` |
-| `collaborate <task>` | Multi-AI collab | `maw collaborate "Refactor module"` |
+| `delegate <ai> <task>` | Delegate to specific AI | `maw delegate codex "Write tests"` |
+| `delegate codex <task>` | Send to Codex | `maw delegate codex "Debug this" --cd .` |
+| `delegate gemini <task>` | Send to Gemini | `maw delegate gemini "Analyze diagram"` |
 
 ### Session Commands
 
@@ -207,9 +262,37 @@ Multi-AI-Workflow/
 |---------|-------------|
 | `skill list` | List available skills |
 | `skill install <source>` | Install skill |
-| `bridge start` | Start bridge service |
-| `search <query>` | Search codebase |
 | `view` | Open dashboard |
+| `bridge start` | Start bridge service |
+
+---
+
+## Dashboard
+
+The MAW Dashboard provides real-time visualization of your AI workflows:
+
+```bash
+# Start the dashboard
+maw view
+
+# Or directly
+cd dashboard && npm start
+```
+
+### Features
+
+- **Overview**: Stats, AI usage, recent activity
+- **Sessions**: Manage workflow sessions with linked AI session IDs
+- **Workflows**: Track execution progress and results
+- **AI Logs**: View prompts, responses, and token usage
+- **Skills**: Manage installed AI collaboration skills
+
+### Real-time Updates
+
+The dashboard uses WebSocket for live updates:
+- Session state changes
+- Workflow progress
+- AI execution status
 
 ---
 
@@ -250,7 +333,37 @@ Level 1: LITE          Level 2: LITE-PLAN      Level 3: PLAN          Level 4: B
                                               |    v    |
                                               | Verify  |
                                               +---------+
+
+
+Level 5: FIVE-PHASE
+===================
+
+  +---------+    +-----------+    +-----------+    +-----------+    +-------+
+  | Context | -> | Analysis  | -> | Prototype | -> | Implement | -> | Audit |
+  | Claude  |    | Codex +   |    | Claude    |    | Claude    |    | All   |
+  +---------+    | Gemini    |    +-----------+    +-----------+    +-------+
+                 +-----------+
 ```
+
+---
+
+## Skills
+
+MAW supports extensible skills for AI collaboration:
+
+```bash
+# List installed skills
+maw skill list
+
+# Skills are stored in ~/.maw/skills/
+```
+
+### Available Skills
+
+| Skill | Description |
+|-------|-------------|
+| `collaborating-with-codex` | Codex CLI integration |
+| `collaborating-with-gemini` | Gemini CLI integration |
 
 ---
 
@@ -277,13 +390,6 @@ git push origin feature/amazing-feature
 ## License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
----
-
-## Acknowledgments
-
-- [Claude-Code-Workflow](https://github.com/catlog22/Claude-Code-Workflow) - Workflow engine inspiration
-- [GuDaStudio/skills](https://github.com/GuDaStudio/skills) - AI collaboration skills
 
 ---
 

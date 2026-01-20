@@ -9,10 +9,12 @@ import { Router, Request, Response } from 'express';
 import { v4 as uuidv4 } from 'uuid';
 import { DashboardStorage, SessionRecord, WorkflowRun, AIExecutionLog } from '../storage';
 import type DashboardServer from '../server';
+import type { MAWBridge } from '../maw-bridge';
 
 export function createApiRoutes(
   storage: DashboardStorage,
-  server: DashboardServer
+  server: DashboardServer,
+  mawBridge?: MAWBridge
 ): Router {
   const router = Router();
 
@@ -290,6 +292,70 @@ export function createApiRoutes(
       const { value } = req.body;
       storage.setPreference(req.params.key, value);
       res.json({ key: req.params.key, value });
+    } catch (error) {
+      res.status(500).json({ error: String(error) });
+    }
+  });
+
+  // ============= Skills (MAW Bridge) =============
+
+  router.get('/skills', (_req: Request, res: Response) => {
+    try {
+      if (!mawBridge) {
+        return res.json({ skills: [], total: 0 });
+      }
+
+      const skills = mawBridge.getInstalledSkills();
+      res.json({ skills, total: skills.length });
+    } catch (error) {
+      res.status(500).json({ error: String(error) });
+    }
+  });
+
+  // ============= Enhanced Session Details =============
+
+  router.get('/sessions/:id/details', (req: Request, res: Response) => {
+    try {
+      if (!mawBridge) {
+        // Fallback to basic session info
+        const session = storage.getSession(req.params.id);
+        if (!session) {
+          return res.status(404).json({ error: 'Session not found' });
+        }
+        return res.json({
+          session,
+          aiSessions: {},
+          workflows: storage.getWorkflowsBySession(req.params.id),
+          aiLogs: storage.getAILogsBySession(req.params.id),
+        });
+      }
+
+      const details = mawBridge.getSessionDetails(req.params.id);
+      if (!details) {
+        return res.status(404).json({ error: 'Session not found' });
+      }
+
+      res.json({
+        ...details,
+        aiLogs: storage.getAILogsBySession(req.params.id),
+      });
+    } catch (error) {
+      res.status(500).json({ error: String(error) });
+    }
+  });
+
+  // ============= Sync Trigger =============
+
+  router.post('/sync', async (_req: Request, res: Response) => {
+    try {
+      if (!mawBridge) {
+        return res.status(400).json({ error: 'MAW Bridge not initialized' });
+      }
+
+      await mawBridge.syncSessions();
+      await mawBridge.syncWorkflowPlans();
+
+      res.json({ status: 'ok', message: 'Sync completed' });
     } catch (error) {
       res.status(500).json({ error: String(error) });
     }
