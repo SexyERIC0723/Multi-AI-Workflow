@@ -23,7 +23,9 @@
 
 **Claude + Codex + Gemini = Unstoppable**
 
-[Features](#features) | [Quick Start](#quick-start) | [Architecture](#architecture) | [Commands](#commands) | [Contributing](#contributing)
+[Features](#-features) | [Installation](#-installation) | [Quick Start](#-quick-start) | [Workflow Modes](#-workflow-modes) | [Usage in Claude Code](#-usage-in-claude-code)
+
+[中文文档](README_CN.md)
 
 </div>
 
@@ -34,140 +36,122 @@
 **MAW (Multi-AI Workflow)** is a revolutionary CLI framework that orchestrates multiple AI agents to work together seamlessly. Imagine having Claude's reasoning, Codex's code execution, and Gemini's multimodal capabilities all working in harmony on your projects.
 
 ```
-+------------------------------------------------------------------+
-|                                                                  |
-|   [CLAUDE]           [CODEX]            [GEMINI]                 |
-|   Planning &         Code Execution     Multimodal               |
-|   Reasoning          & Analysis         Analysis                 |
-|                                                                  |
-|         \                |               /                       |
-|          \               |              /                        |
-|           \              |             /                         |
-|            v             v            v                          |
-|         +-----------------------------+                          |
-|         |      MAW ORCHESTRATOR       |                          |
-|         |   Unified Session Control   |                          |
-|         +-----------------------------+                          |
-|                        |                                         |
-|                        v                                         |
-|              +-----------------+                                 |
-|              |    YOUR CODE    |                                 |
-|              +-----------------+                                 |
-|                                                                  |
-+------------------------------------------------------------------+
+┌──────────────────────────────────────────────────────────────┐
+│                                                              │
+│   [CLAUDE]           [CODEX]            [GEMINI]             │
+│   Planning &         Code Execution     Multimodal           │
+│   Reasoning          & Analysis         Analysis             │
+│                                                              │
+│         \                |               /                   │
+│          \               |              /                    │
+│           \              |             /                     │
+│            v             v            v                      │
+│         +-------------------------------+                    │
+│         |       MAW ORCHESTRATOR        |                    │
+│         |    Unified Session Control    |                    │
+│         +-------------------------------+                    │
+│                        |                                     │
+│                        v                                     │
+│              +-----------------+                             │
+│              |    YOUR CODE    |                             │
+│              +-----------------+                             │
+│                                                              │
+└──────────────────────────────────────────────────────────────┘
 ```
 
 ---
 
 ## Features
 
-<table>
-<tr>
-<td width="50%">
-
 ### Multi-AI Delegation
 Delegate tasks to the right AI for the job. Claude plans, Codex executes, Gemini analyzes.
 
-### Unified Sessions
-Single session ID syncs across all AI agents. Resume work seamlessly.
+### 6 Workflow Levels
+| Level | Description |
+|-------|-------------|
+| **Lite** | Instant execution, no planning |
+| **Lite-Plan** | Quick planning then execute |
+| **Plan** | Standard planning workflow |
+| **TDD-Plan** | Test-driven development |
+| **Brainstorm** | Multi-role ideation |
+| **Five-Phase** | Professional 5-phase collaboration |
 
-### Semantic Routing
-Auto-detect the best AI for your task based on content analysis with `maw run`.
+### Smart Routing
+Auto-detect the best AI for your task based on content analysis.
 
-</td>
-<td width="50%">
-
-### 5-Phase Collaboration
-Professional workflow pattern:
-1. **Context** - Gather project info
-2. **Analysis** - Multi-AI analysis
-3. **Prototype** - Initial implementation
-4. **Implement** - Full implementation
-5. **Audit** - Review & verify
-
-### Sandbox Security
-Three security levels:
-- `read-only` - Safe exploration
-- `workspace-write` - Project changes
-- `full-access` - Complete control
-
-</td>
-</tr>
-<tr>
-<td width="50%">
-
-### 4-Level Workflows
-- **Lite**: Instant execution
-- **Lite-Plan**: Quick planning
-- **Plan**: Standard planning
-- **TDD-Plan**: Test-driven development
-- **Brainstorm**: Multi-role ideation
-
-</td>
-<td width="50%">
+### Report Generation
+Generate professional reports with auto-generated diagrams.
 
 ### Real-time Dashboard
-Visual workflow management with:
-- Session monitoring
-- Workflow tracking
-- AI execution logs
-- Skills management
-- WebSocket live updates
+Visual workflow management with WebSocket live updates.
 
-</td>
-</tr>
-</table>
+### Unified Sessions
+Single session ID syncs across all AI agents.
 
 ---
 
-## Quick Start
+## Installation
 
 ### Prerequisites
 
 - Node.js >= 18.0.0
 - Python >= 3.9
-- [Claude Code](https://claude.ai) CLI installed
+- [Claude Code](https://claude.ai/code) CLI
 - [Codex CLI](https://github.com/openai/codex) (optional)
 - [Gemini CLI](https://github.com/google/gemini-cli) (optional)
 
-### Installation
+### Step-by-Step Installation
 
 ```bash
-# Clone the repository
+# 1. Clone the repository
 git clone https://github.com/SexyERIC0723/Multi-AI-Workflow.git
 cd Multi-AI-Workflow
 
-# Install dependencies
+# 2. Install Node.js dependencies
 npm install
 
-# Build the project
+# 3. Build the project
 npm run build
 
-# Install Python bridges
+# 4. Install Python bridges
 pip install -e bridges/
 
-# Link globally (optional)
+# 5. Link globally (optional but recommended)
 npm link
+
+# 6. Verify installation
+maw --help
 ```
 
-### First Run
+### Configure API Keys (Optional)
+
+For Gemini with proxy API:
+```bash
+# Edit the bridge configuration
+# File: ~/.maw/skills/collaborating-with-gemini/scripts/gemini_bridge.py
+# Set your API key and base URL
+```
+
+---
+
+## Quick Start
 
 ```bash
-# Check available commands
-maw --help
-
 # Smart routing - auto-selects best AI
 maw run "Analyze this codebase structure"
 
 # Run a simple workflow
-maw workflow lite "Analyze this codebase"
+maw workflow lite "Fix typos in README"
+
+# Standard planning workflow
+maw workflow plan "Implement user authentication"
 
 # 5-phase professional workflow
-maw workflow five-phase "Implement user authentication"
+maw workflow five-phase "Refactor the authentication module"
 
 # Delegate to specific AI
 maw delegate codex "Write unit tests" --cd .
-maw delegate gemini "Analyze these screenshots"
+maw delegate gemini "Analyze this architecture"
 
 # Open the dashboard
 maw view
@@ -175,195 +159,446 @@ maw view
 
 ---
 
+## Workflow Modes
+
+### 1. Lite Mode - Instant Execution
+
+```
+User Task ────────► Direct Execute ────────► Result
+```
+
+**Best for:** Simple fixes, small changes, one-time tasks
+
+```bash
+maw workflow lite "Add comments to this function"
+maw workflow lite "Format this file"
+maw workflow lite "Change all console.log to logger.debug"
+```
+
+---
+
+### 2. Lite-Plan Mode - Quick Planning
+
+```
+User Task ────► Quick Plan (1-2 steps) ────► Execute ────► Result
+```
+
+**Best for:** Medium complexity tasks, quick development
+
+```bash
+maw workflow lite-plan "Add error handling to API"
+maw workflow lite-plan "Implement simple caching"
+```
+
+---
+
+### 3. Plan Mode - Standard Planning (Default)
+
+```
+User Task
+    │
+    ▼
+┌──────────┐
+│  Plan    │  ← Analyze requirements, design solution
+└────┬─────┘
+     │
+     ▼
+┌──────────┐
+│  Review  │  ← Check plan feasibility
+└────┬─────┘
+     │
+     ▼
+┌──────────┐
+│ Execute  │  ← Implement step by step
+└────┬─────┘
+     │
+     ▼
+┌──────────┐
+│  Verify  │  ← Confirm results
+└────┬─────┘
+     │
+     ▼
+  Result
+```
+
+**Best for:** Daily development, standard features
+
+```bash
+maw workflow plan "Implement user login"
+maw workflow plan "Add database connection pool"
+maw workflow plan "Refactor error handling"
+```
+
+---
+
+### 4. TDD-Plan Mode - Test-Driven Development
+
+```
+User Task
+    │
+    ▼
+┌────────────────┐
+│ Write Tests    │  ← RED: Define expected behavior
+│ (RED)          │
+└───────┬────────┘
+        │
+        ▼
+┌────────────────┐
+│ Run Tests      │  ← Confirm tests fail
+│ (Confirm Fail) │
+└───────┬────────┘
+        │
+        ▼
+┌────────────────┐
+│ Implement      │  ← GREEN: Write minimal code to pass
+│ (GREEN)        │
+└───────┬────────┘
+        │
+        ▼
+┌────────────────┐
+│ Refactor       │  ← REFACTOR: Optimize with test safety
+│ (REFACTOR)     │
+└───────┬────────┘
+        │
+        ▼
+  Done (with tests)
+```
+
+**Best for:** Core business logic, APIs, critical features
+
+```bash
+maw workflow tdd-plan "Implement order calculation"
+maw workflow tdd-plan "Add user permission validation"
+maw workflow tdd-plan "Implement payment interface"
+```
+
+---
+
+### 5. Brainstorm Mode - Multi-Role Ideation
+
+```
+User Topic
+    │
+    ▼
+┌─────────────────────────────────────────┐
+│           Multi-Role Discussion          │
+│                                         │
+│  ┌──────────┐  ┌──────────┐  ┌────────┐ │
+│  │ Architect│  │Developer │  │  QA    │ │
+│  └────┬─────┘  └────┬─────┘  └───┬────┘ │
+│       │             │            │      │
+│       └──────────┬──┴────────────┘      │
+│                  │                      │
+│                  ▼                      │
+│         Discussion & Debate             │
+└─────────────────────────────────────────┘
+                   │
+                   ▼
+          ┌──────────────┐
+          │  Conclusion  │
+          │ Best Solution│
+          └──────────────┘
+```
+
+**Best for:** Architecture decisions, technical choices, complex analysis
+
+```bash
+maw workflow brainstorm "API design approach"
+maw workflow brainstorm "Database selection"
+maw workflow brainstorm "Performance optimization strategy"
+```
+
+**Roles:**
+| Role | Focus |
+|------|-------|
+| Architect | Overall design, scalability, tech debt |
+| Developer | Implementation difficulty, efficiency, code quality |
+| QA | Testability, edge cases, potential issues |
+
+---
+
+### 6. Five-Phase Mode - Professional Multi-AI Collaboration
+
+```
+User Task
+    │
+    ▼
+┌─────────────────────────────────────────────────────────┐
+│ Phase 1: CONTEXT                           [Claude]     │
+│ - Analyze project structure                             │
+│ - Understand existing code                              │
+│ - Gather relevant information                           │
+└─────────────────────────────────────────────────────────┘
+    │
+    ▼
+┌─────────────────────────────────────────────────────────┐
+│ Phase 2: ANALYSIS                    [Codex + Gemini]   │
+│                                                         │
+│   ┌─────────────┐              ┌─────────────┐         │
+│   │   Codex     │   Parallel   │   Gemini    │         │
+│   │ Code-level  │◄────────────►│ Arch-level  │         │
+│   │  Analysis   │              │  Analysis   │         │
+│   └─────────────┘              └─────────────┘         │
+└─────────────────────────────────────────────────────────┘
+    │
+    ▼
+┌─────────────────────────────────────────────────────────┐
+│ Phase 3: PROTOTYPE                         [Claude]     │
+│ - Synthesize analysis results                           │
+│ - Design initial solution                               │
+│ - Create code skeleton                                  │
+└─────────────────────────────────────────────────────────┘
+    │
+    ▼
+┌─────────────────────────────────────────────────────────┐
+│ Phase 4: IMPLEMENT                         [Claude]     │
+│ - Complete code implementation                          │
+│ - Handle edge cases                                     │
+│ - Add error handling                                    │
+└─────────────────────────────────────────────────────────┘
+    │
+    ▼
+┌─────────────────────────────────────────────────────────┐
+│ Phase 5: AUDIT                   [Claude+Codex+Gemini]  │
+│ - Code review                                           │
+│ - Security check                                        │
+│ - Final verification                                    │
+└─────────────────────────────────────────────────────────┘
+    │
+    ▼
+  Complete (High-quality, multi-AI verified)
+```
+
+**Best for:** Large features, system refactoring, critical modules
+
+```bash
+maw workflow five-phase "Implement complete payment system"
+maw workflow five-phase "Refactor database access layer"
+maw workflow five-phase "Implement OAuth2 authentication"
+```
+
+---
+
+## Mode Comparison
+
+| Mode | Complexity | Time | AI Involved | Use Case |
+|------|------------|------|-------------|----------|
+| **Lite** | ⭐ | Shortest | Claude | Simple fixes |
+| **Lite-Plan** | ⭐⭐ | Short | Claude | Medium tasks |
+| **Plan** | ⭐⭐⭐ | Medium | Claude | Daily development |
+| **TDD-Plan** | ⭐⭐⭐⭐ | Longer | Claude | Test-covered features |
+| **Brainstorm** | ⭐⭐⭐ | Medium | Claude (multi-role) | Design decisions |
+| **Five-Phase** | ⭐⭐⭐⭐⭐ | Longest | Claude+Codex+Gemini | Complex, high-quality |
+
+### How to Choose?
+
+```
+                    What's your task?
+                          │
+          ┌───────────────┼───────────────┐
+          │               │               │
+          ▼               ▼               ▼
+     Simple fix?     Development?    Design decision?
+          │               │               │
+          ▼               │               ▼
+        Lite             │          Brainstorm
+                          │
+               ┌──────────┴──────────┐
+               │                     │
+               ▼                     ▼
+          Need tests?          Need multi-AI?
+               │                     │
+          ┌────┴────┐           ┌────┴────┐
+          ▼         ▼           ▼         ▼
+      TDD-Plan    Plan    Five-Phase   Plan
+```
+
+---
+
+## Usage in Claude Code
+
+### Slash Commands
+
+MAW provides slash commands for Claude Code:
+
+| Command | Description |
+|---------|-------------|
+| `/gemini <task>` | Delegate to Gemini |
+| `/codex <task>` | Delegate to Codex |
+| `/maw <command>` | Execute MAW command |
+| `/report <topic>` | Generate report with diagrams |
+
+**Examples:**
+```
+/gemini Analyze the performance of this code
+/codex Write unit tests for the auth module
+/maw workflow plan "Implement caching layer"
+/report "System Architecture Overview"
+```
+
+### Natural Language
+
+You can also use natural language with Claude:
+
+| You Say | Claude Does |
+|---------|-------------|
+| "Let Gemini analyze this..." | Calls Gemini bridge |
+| "Delegate to Codex..." | Calls Codex bridge |
+| "Use MAW to..." | Starts MAW workflow |
+| "Generate a report about..." | Runs report generator |
+
+**Examples:**
+```
+"Let Gemini analyze this module's architecture"
+"Delegate to Codex to write tests for this function"
+"Use MAW five-phase workflow to refactor authentication"
+"Generate a report about our API design with diagrams"
+```
+
+### Multi-AI Collaboration Triggers
+
+```
+"Use multiple AIs to collaborate on..."
+"Let Claude plan and Codex execute..."
+"Start five-phase collaboration workflow..."
+```
+
+---
+
+## Report Generation
+
+MAW can generate professional reports with auto-generated diagrams:
+
+```bash
+# Using slash command
+/report "Machine Learning Pipeline Architecture"
+
+# Using Python script directly
+python ~/.maw/skills/report-generator/report_generator.py \
+  --topic "System Design" \
+  --content "Your research content..." \
+  --output report.md
+```
+
+**Features:**
+- Auto-analyzes content structure
+- Identifies where diagrams would help
+- Generates Mermaid diagrams (or images when available)
+- Professional academic style output
+
+---
+
 ## Architecture
 
 ```
 Multi-AI-Workflow/
-|
-+-- maw/                       # TypeScript CLI Core
-|   +-- src/
-|   |   +-- cli.ts            # Main CLI entry
-|   |   +-- commands/         # Command implementations
-|   |   |   +-- delegate.ts   # AI delegation + semantic routing
-|   |   |   +-- workflow.ts   # Workflow execution
-|   |   |   +-- session.ts    # Session management
-|   |   |   +-- ...
-|   |   +-- core/             # Core modules
-|   |   |   +-- workflow-engine.ts   # 4-level + 5-phase workflows
-|   |   |   +-- session-manager.ts
-|   |   |   +-- skill-registry.ts
-|   |   +-- adapters/         # AI adapters
-|   +-- bin/maw.js            # CLI executable
-|
-+-- bridges/                   # Python AI Bridges
-|   +-- src/maw_bridges/
-|       +-- codex_bridge.py   # Codex CLI wrapper (streaming)
-|       +-- gemini_bridge.py  # Gemini CLI wrapper
-|
-+-- dashboard/                 # Web Dashboard
-|   +-- src/
-|   |   +-- server.ts         # Express + WebSocket server
-|   |   +-- storage.ts        # SQLite database
-|   |   +-- maw-bridge.ts     # CLI data integration
-|   |   +-- routes/api.ts     # REST API endpoints
-|   +-- public/               # Frontend SPA
-|
-+-- codex-lens/               # Code search & indexing
-+-- .maw/                     # Configuration & skills
-    +-- skills/               # Installed skills
+│
+├── maw/                       # TypeScript CLI Core
+│   ├── src/
+│   │   ├── cli.ts            # Main CLI entry
+│   │   ├── commands/         # Command implementations
+│   │   │   ├── delegate.ts   # AI delegation + semantic routing
+│   │   │   ├── workflow.ts   # Workflow execution
+│   │   │   └── session.ts    # Session management
+│   │   └── core/             # Core modules
+│   │       ├── workflow-engine.ts   # 6-level workflows
+│   │       ├── session-manager.ts
+│   │       └── skill-registry.ts
+│   └── bin/maw.js            # CLI executable
+│
+├── bridges/                   # Python AI Bridges
+│   └── src/maw_bridges/
+│       ├── codex_bridge.py   # Codex CLI wrapper
+│       └── gemini_bridge.py  # Gemini CLI/API wrapper
+│
+├── dashboard/                 # Web Dashboard
+│   ├── src/
+│   │   ├── server.ts         # Express + WebSocket
+│   │   ├── storage.ts        # SQLite database
+│   │   └── maw-bridge.ts     # CLI data integration
+│   └── public/               # Frontend SPA
+│
+└── .maw/                      # Configuration & Skills
+    ├── config.json
+    └── skills/               # Installed skills
 ```
-
----
-
-## Commands
-
-### Workflow Commands
-
-| Command | Description | Example |
-|---------|-------------|---------|
-| `workflow lite <task>` | Instant execution | `maw workflow lite "Fix typos"` |
-| `workflow lite-plan <task>` | Quick plan + execute | `maw workflow lite-plan "Add logging"` |
-| `workflow plan <task>` | Standard planning | `maw workflow plan "Add auth"` |
-| `workflow tdd-plan <task>` | Test-driven development | `maw workflow tdd-plan "Add API endpoint"` |
-| `workflow brainstorm <topic>` | Multi-role ideation | `maw workflow brainstorm "API design"` |
-| `workflow five-phase <task>` | 5-phase collaboration | `maw workflow five-phase "Refactor auth"` |
-
-### Smart Routing
-
-| Command | Description | Example |
-|---------|-------------|---------|
-| `run <task>` | Auto-select best AI | `maw run "Write unit tests"` |
-
-The `run` command analyzes your task and routes it to:
-- **Codex**: Code execution, tests, debugging
-- **Gemini**: Image analysis, documentation review
-- **Claude**: Planning, reasoning, architecture
-
-### Delegation Commands
-
-| Command | Description | Example |
-|---------|-------------|---------|
-| `delegate <ai> <task>` | Delegate to specific AI | `maw delegate codex "Write tests"` |
-| `delegate codex <task>` | Send to Codex | `maw delegate codex "Debug this" --cd .` |
-| `delegate gemini <task>` | Send to Gemini | `maw delegate gemini "Analyze diagram"` |
-
-### Session Commands
-
-| Command | Description |
-|---------|-------------|
-| `session list` | List all sessions |
-| `session new <name>` | Create new session |
-| `session resume <id>` | Resume session |
-| `session sync` | Sync across AIs |
-
-### Other Commands
-
-| Command | Description |
-|---------|-------------|
-| `skill list` | List available skills |
-| `skill install <source>` | Install skill |
-| `view` | Open dashboard |
-| `bridge start` | Start bridge service |
-
----
-
-## Dashboard
-
-The MAW Dashboard provides real-time visualization of your AI workflows:
-
-```bash
-# Start the dashboard
-maw view
-
-# Or directly
-cd dashboard && npm start
-```
-
-### Features
-
-- **Overview**: Stats, AI usage, recent activity
-- **Sessions**: Manage workflow sessions with linked AI session IDs
-- **Workflows**: Track execution progress and results
-- **AI Logs**: View prompts, responses, and token usage
-- **Skills**: Manage installed AI collaboration skills
-
-### Real-time Updates
-
-The dashboard uses WebSocket for live updates:
-- Session state changes
-- Workflow progress
-- AI execution status
 
 ---
 
 ## Configuration
 
-MAW stores configuration in `.maw/config.json`:
+MAW configuration is stored in `.maw/config.json`:
 
 ```json
 {
-  "defaultAI": "claude",
-  "sandbox": "workspace-write",
-  "sessionPersistence": true,
-  "bridgePort": 8765,
+  "ai": {
+    "claude": { "enabled": true },
+    "codex": { "enabled": true, "cliPath": "codex" },
+    "gemini": { "enabled": true, "cliPath": "gemini" }
+  },
+  "workflow": {
+    "defaultLevel": "plan",
+    "parallelExecution": true,
+    "maxConcurrency": 2
+  },
+  "security": {
+    "defaultSandbox": "read-only",
+    "maxExecutionTime": 300000
+  },
   "dashboard": {
     "port": 3000,
-    "theme": "dark"
+    "autoOpen": true
   }
 }
 ```
 
----
+### Sandbox Levels
 
-## Workflow Levels
-
-```
-Level 1: LITE          Level 2: LITE-PLAN      Level 3: PLAN          Level 4: BRAINSTORM
-==============        ================        ============          ================
-
-  +---------+          +---------+            +---------+            +---------+
-  | Execute |          |  Plan   |            |  Plan   |            | Roles:  |
-  | Instant |          |    |    |            |    |    |            | - Arch  |
-  +---------+          |    v    |            |    v    |            | - Dev   |
-                       | Execute |            | Review  |            | - QA    |
-                       +---------+            |    |    |            +---------+
-                                              |    v    |                 |
-                                              | Execute |            Collaborate
-                                              |    |    |
-                                              |    v    |
-                                              | Verify  |
-                                              +---------+
-
-
-Level 5: FIVE-PHASE
-===================
-
-  +---------+    +-----------+    +-----------+    +-----------+    +-------+
-  | Context | -> | Analysis  | -> | Prototype | -> | Implement | -> | Audit |
-  | Claude  |    | Codex +   |    | Claude    |    | Claude    |    | All   |
-  +---------+    | Gemini    |    +-----------+    +-----------+    +-------+
-                 +-----------+
-```
+| Level | Description | Use Case |
+|-------|-------------|----------|
+| `read-only` | Cannot modify any files | Code analysis, auditing |
+| `workspace-write` | Can modify project files | Daily development |
+| `full-access` | Complete control | System-level operations |
 
 ---
 
-## Skills
+## Commands Reference
 
-MAW supports extensible skills for AI collaboration:
+### Workflow Commands
 
 ```bash
-# List installed skills
-maw skill list
-
-# Skills are stored in ~/.maw/skills/
+maw workflow lite <task>        # Instant execution
+maw workflow lite-plan <task>   # Quick plan + execute
+maw workflow plan <task>        # Standard planning
+maw workflow tdd-plan <task>    # Test-driven development
+maw workflow brainstorm <topic> # Multi-role ideation
+maw workflow five-phase <task>  # 5-phase collaboration
 ```
 
-### Available Skills
+### Delegation Commands
 
-| Skill | Description |
-|-------|-------------|
-| `collaborating-with-codex` | Codex CLI integration |
-| `collaborating-with-gemini` | Gemini CLI integration |
+```bash
+maw delegate codex <task> --cd .    # Delegate to Codex
+maw delegate gemini <task>          # Delegate to Gemini
+maw run <task>                      # Smart routing
+```
+
+### Session Commands
+
+```bash
+maw session list              # List all sessions
+maw session new <name>        # Create new session
+maw session resume <id>       # Resume session
+maw session sync              # Sync across AIs
+```
+
+### Other Commands
+
+```bash
+maw view                      # Open dashboard
+maw skill list                # List installed skills
+maw skill install <source>    # Install skill
+```
 
 ---
 
@@ -373,15 +608,9 @@ We welcome contributions! Please see our contributing guidelines.
 
 ```bash
 # Fork the repository
-# Create your feature branch
 git checkout -b feature/amazing-feature
-
-# Commit your changes
 git commit -m 'Add amazing feature'
-
-# Push to the branch
 git push origin feature/amazing-feature
-
 # Open a Pull Request
 ```
 
@@ -397,7 +626,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ### Star us on GitHub!
 
-If you find MAW useful, please consider giving us a star. It helps others discover this project!
+If you find MAW useful, please consider giving us a star.
 
 [![GitHub stars](https://img.shields.io/github/stars/SexyERIC0723/Multi-AI-Workflow?style=social)](https://github.com/SexyERIC0723/Multi-AI-Workflow)
 
