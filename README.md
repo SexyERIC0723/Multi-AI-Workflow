@@ -66,7 +66,7 @@
 ### Multi-AI Delegation
 Delegate tasks to the right AI for the job. Claude plans, Codex executes, Gemini analyzes.
 
-### 6 Workflow Levels
+### 7 Workflow Modes
 | Level | Description |
 |-------|-------------|
 | **Lite** | Instant execution, no planning |
@@ -75,6 +75,7 @@ Delegate tasks to the right AI for the job. Claude plans, Codex executes, Gemini
 | **TDD-Plan** | Test-driven development |
 | **Brainstorm** | Multi-role ideation |
 | **Five-Phase** | Professional 5-phase collaboration |
+| **Ralph Loop** | Iterative AI loop until completion |
 
 ### Smart Routing
 Auto-detect the best AI for your task based on content analysis.
@@ -379,6 +380,75 @@ maw workflow five-phase "Implement OAuth2 authentication"
 
 ---
 
+### 7. Ralph Loop Mode - Iterative AI Development
+
+Ralph Loop is inspired by the "Ralph technique" - a continuous AI agent loop for iterative development until task completion.
+
+```
+                     ┌──────────────────────────────────────┐
+                     │            RALPH LOOP                │
+                     │   "Persistence Wins"                 │
+                     └──────────────────────────────────────┘
+                                      │
+                                      ▼
+┌─────────────────────────────────────────────────────────────────────┐
+│                                                                     │
+│    ┌──────────┐                                                     │
+│    │  Prompt  │ ◄───────────────────────────────────┐               │
+│    │ (Fixed)  │                                     │               │
+│    └────┬─────┘                                     │               │
+│         │                                           │               │
+│         ▼                                           │               │
+│    ┌──────────┐                                     │               │
+│    │    AI    │  ← Claude/Codex/Gemini/Auto         │               │
+│    │ Execute  │                                     │               │
+│    └────┬─────┘                                     │               │
+│         │                                           │               │
+│         ▼                                           │               │
+│    ┌──────────┐     No      ┌───────────────────┐  │               │
+│    │ Complete?├────────────►│  Next Iteration   │──┘               │
+│    │          │             │  (AI sees its     │                   │
+│    └────┬─────┘             │   previous work)  │                   │
+│         │ Yes               └───────────────────┘                   │
+│         ▼                                                           │
+│    ┌──────────┐                                                     │
+│    │   Done   │  ← Completion Promise Found                         │
+│    └──────────┘                                                     │
+│                                                                     │
+└─────────────────────────────────────────────────────────────────────┘
+```
+
+**Best for:** Tasks with clear success criteria, iterative refinement, automated verification
+
+```bash
+# Basic usage
+maw workflow ralph "Build a REST API for todos. Output <promise>COMPLETE</promise> when done."
+
+# With options
+maw workflow ralph "Implement user auth with tests" \
+  --max-iterations 30 \
+  --completion-promise "COMPLETE" \
+  --ai auto \
+  --verbose
+```
+
+**Key Concepts:**
+| Concept | Description |
+|---------|-------------|
+| **Completion Promise** | A signal phrase that indicates task completion |
+| **Iteration** | Each loop cycle where AI sees its previous work |
+| **Persistence** | Keep trying until success (within max iterations) |
+| **Self-Correction** | AI learns from its own failures in previous iterations |
+
+**When to Use:**
+- ✅ Tasks with clear, testable success criteria
+- ✅ Tasks requiring iterative improvement
+- ✅ Tasks with automatic verification (tests, linters)
+- ❌ Tasks requiring human judgment
+- ❌ Tasks with unclear completion criteria
+
+---
+
 ## Mode Comparison
 
 | Mode | Complexity | Time | AI Involved | Use Case |
@@ -389,6 +459,7 @@ maw workflow five-phase "Implement OAuth2 authentication"
 | **TDD-Plan** | ⭐⭐⭐⭐ | Longer | Claude | Test-covered features |
 | **Brainstorm** | ⭐⭐⭐ | Medium | Claude (multi-role) | Design decisions |
 | **Five-Phase** | ⭐⭐⭐⭐⭐ | Longest | Claude+Codex+Gemini | Complex, high-quality |
+| **Ralph Loop** | ⭐⭐⭐⭐ | Variable | Auto-selected | Iterative tasks |
 
 ### How to Choose?
 
@@ -427,12 +498,14 @@ MAW provides slash commands for Claude Code:
 | `/codex <task>` | Delegate to Codex |
 | `/maw <command>` | Execute MAW command |
 | `/report <topic>` | Generate report with diagrams |
+| `/ralph-loop <prompt>` | Start iterative AI loop |
 
 **Examples:**
 ```
 /gemini Analyze the performance of this code
 /codex Write unit tests for the auth module
 /maw workflow plan "Implement caching layer"
+/ralph-loop "Build REST API with tests. Output COMPLETE when done."
 /report "System Architecture Overview"
 ```
 
@@ -573,6 +646,14 @@ maw workflow plan <task>        # Standard planning
 maw workflow tdd-plan <task>    # Test-driven development
 maw workflow brainstorm <topic> # Multi-role ideation
 maw workflow five-phase <task>  # 5-phase collaboration
+maw workflow ralph <prompt>     # Iterative AI loop
+
+# Ralph Loop options
+maw workflow ralph "Build feature X" \
+  --max-iterations 30 \
+  --completion-promise "COMPLETE" \
+  --ai auto \
+  --verbose
 ```
 
 ### Delegation Commands

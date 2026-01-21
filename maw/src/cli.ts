@@ -68,6 +68,46 @@ workflowCmd
   });
 
 // ============================================
+// Ralph Loop Commands (Iterative AI Loop)
+// ============================================
+
+workflowCmd
+  .command('ralph <prompt>')
+  .description('Ralph Loop: Iterative AI execution until completion promise')
+  .option('-n, --max-iterations <n>', 'Maximum iterations', '50')
+  .option('-c, --completion-promise <text>', 'Completion signal text', 'COMPLETE')
+  .option('-a, --ai <ai>', 'AI to use (claude|codex|gemini|auto)', 'auto')
+  .option('--cd <dir>', 'Working directory', process.cwd())
+  .option('-s, --sandbox <level>', 'Sandbox level', 'workspace-write')
+  .option('-v, --verbose', 'Show detailed output', false)
+  .option('-d, --delay <ms>', 'Delay between iterations (ms)', '1000')
+  .action(async (prompt: string, options) => {
+    const { executeRalphLoop } = await import('./commands/ralph.js');
+    await executeRalphLoop(prompt, {
+      maxIterations: parseInt(options.maxIterations, 10),
+      completionPromise: options.completionPromise,
+      ai: options.ai,
+      cd: options.cd,
+      sandbox: options.sandbox,
+      verbose: options.verbose,
+      delay: parseInt(options.delay, 10),
+    });
+  });
+
+program
+  .command('cancel-ralph')
+  .description('Cancel the active Ralph loop')
+  .action(async () => {
+    const { cancelRalphLoop } = await import('./commands/ralph.js');
+    const cancelled = cancelRalphLoop();
+    if (cancelled) {
+      console.log('Ralph loop cancellation requested.');
+    } else {
+      console.log('No active Ralph loop to cancel.');
+    }
+  });
+
+// ============================================
 // AI Delegation Commands (from skills)
 // ============================================
 

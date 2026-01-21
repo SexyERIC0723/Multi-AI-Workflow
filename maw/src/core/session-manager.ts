@@ -10,7 +10,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs';
 import { join } from 'path';
 
 export type SessionStatus = 'active' | 'paused' | 'completed' | 'archived';
-export type WorkflowLevel = 'lite' | 'lite-plan' | 'plan' | 'tdd-plan' | 'brainstorm' | 'delegate' | 'collaborate';
+export type WorkflowLevel = 'lite' | 'lite-plan' | 'plan' | 'tdd-plan' | 'brainstorm' | 'delegate' | 'collaborate' | 'ralph';
 
 /**
  * Unified session structure combining CCW and skills approaches
