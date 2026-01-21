@@ -101,7 +101,28 @@
 - [Codex CLI](https://github.com/openai/codex) (可选)
 - [Gemini CLI](https://github.com/google/gemini-cli) (可选)
 
-### 详细安装步骤
+### 快速安装（推荐）
+
+```bash
+# 克隆并运行安装脚本
+git clone https://github.com/SexyERIC0723/Multi-AI-Workflow.git
+cd Multi-AI-Workflow
+./install.sh
+
+# 重启终端或重新加载配置
+source ~/.zshrc  # 或 ~/.bashrc
+
+# 验证安装
+maw --version
+```
+
+安装脚本会自动：
+- 将 MAW CLI 安装到 `~/.maw/`
+- 设置全局 `maw` 命令
+- 安装 Claude Code 斜杠命令
+- 配置 PATH 环境变量
+
+### 手动安装
 
 ```bash
 # 1. 克隆仓库
@@ -117,11 +138,41 @@ npm run build
 # 4. 安装 Python bridges
 pip install -e bridges/
 
-# 5. 全局链接（可选但推荐）
-npm link
+# 5. 复制到全局目录
+mkdir -p ~/.maw/bin
+cp -r maw ~/.maw/
 
-# 6. 验证安装
+# 6. 创建全局命令
+echo '#!/bin/bash
+node ~/.maw/maw/bin/maw.js "$@"' > ~/.maw/bin/maw
+chmod +x ~/.maw/bin/maw
+
+# 7. 添加到 PATH（添加到 ~/.zshrc 或 ~/.bashrc）
+echo 'export PATH="$HOME/.maw/bin:$PATH"' >> ~/.zshrc
+
+# 8. 安装 Claude Code 斜杠命令
+mkdir -p ~/.claude/commands
+cp claude-commands/*.md ~/.claude/commands/
+
+# 9. 重启终端并验证
 maw --help
+```
+
+### 安装目录结构
+
+安装完成后，`~/.maw` 目录结构如下：
+
+```
+~/.maw/
+├── bin/
+│   └── maw              # 全局命令
+├── maw/                  # MAW CLI
+│   ├── bin/maw.js
+│   └── dist/
+└── skills/               # 已安装的技能
+    ├── collaborating-with-gemini/
+    ├── collaborating-with-codex/
+    └── report-generator/
 ```
 
 ### 配置 API 密钥（可选）

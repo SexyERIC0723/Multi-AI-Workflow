@@ -101,7 +101,28 @@ Single session ID syncs across all AI agents.
 - [Codex CLI](https://github.com/openai/codex) (optional)
 - [Gemini CLI](https://github.com/google/gemini-cli) (optional)
 
-### Step-by-Step Installation
+### Quick Install (Recommended)
+
+```bash
+# Clone and run the installer
+git clone https://github.com/SexyERIC0723/Multi-AI-Workflow.git
+cd Multi-AI-Workflow
+./install.sh
+
+# Restart terminal or source your shell config
+source ~/.zshrc  # or ~/.bashrc
+
+# Verify installation
+maw --version
+```
+
+The installer will:
+- Install MAW CLI to `~/.maw/`
+- Set up global `maw` command
+- Install Claude Code slash commands
+- Configure your PATH
+
+### Manual Installation
 
 ```bash
 # 1. Clone the repository
@@ -117,11 +138,41 @@ npm run build
 # 4. Install Python bridges
 pip install -e bridges/
 
-# 5. Link globally (optional but recommended)
-npm link
+# 5. Copy to global directory
+mkdir -p ~/.maw/bin
+cp -r maw ~/.maw/
 
-# 6. Verify installation
+# 6. Create global command
+echo '#!/bin/bash
+node ~/.maw/maw/bin/maw.js "$@"' > ~/.maw/bin/maw
+chmod +x ~/.maw/bin/maw
+
+# 7. Add to PATH (add to ~/.zshrc or ~/.bashrc)
+echo 'export PATH="$HOME/.maw/bin:$PATH"' >> ~/.zshrc
+
+# 8. Install slash commands for Claude Code
+mkdir -p ~/.claude/commands
+cp claude-commands/*.md ~/.claude/commands/
+
+# 9. Restart terminal and verify
 maw --help
+```
+
+### Installation Structure
+
+After installation, your `~/.maw` directory will look like:
+
+```
+~/.maw/
+├── bin/
+│   └── maw              # Global command
+├── maw/                  # MAW CLI
+│   ├── bin/maw.js
+│   └── dist/
+└── skills/               # Installed skills
+    ├── collaborating-with-gemini/
+    ├── collaborating-with-codex/
+    └── report-generator/
 ```
 
 ### Configure API Keys (Optional)
