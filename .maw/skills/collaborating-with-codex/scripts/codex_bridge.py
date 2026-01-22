@@ -192,7 +192,7 @@ def main():
     parser = argparse.ArgumentParser(description="Codex Bridge")
     parser.add_argument("--PROMPT", required=True, help="Instruction for the task to send to codex.")
     parser.add_argument("--cd", required=True, help="Set the workspace root for codex before executing the task.")
-    parser.add_argument("--sandbox", default="danger-full-access", choices=["read-only", "workspace-write", "danger-full-access"], help="Sandbox policy for model-generated commands. Defaults to `danger-full-access` for network access.")
+    parser.add_argument("--sandbox", default="workspace-write", choices=["read-only", "workspace-write", "danger-full-access"], help="Sandbox policy for model-generated commands. Defaults to `workspace-write` (can only modify files in workspace).")
     parser.add_argument("--SESSION_ID", default="", help="Resume the specified session of the codex. Defaults to `None`, start a new session.")
     parser.add_argument("--skip-git-repo-check", action="store_true", default=True, help="Allow codex running outside a Git repository (useful for one-off directories).")
     parser.add_argument("--return-all-messages", action="store_true", help="Return all messages (e.g. reasoning, tool calls, etc.) from the codex session. Set to `False` by default, only the agent's final reply message is returned.")

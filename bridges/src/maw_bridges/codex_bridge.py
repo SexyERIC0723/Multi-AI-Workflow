@@ -214,9 +214,9 @@ def main():
     )
     parser.add_argument(
         "--sandbox",
-        default="danger-full-access",
+        default="workspace-write",
         choices=["read-only", "workspace-write", "danger-full-access"],
-        help="Sandbox policy for model-generated commands. Defaults to `danger-full-access` for network access."
+        help="Sandbox policy for model-generated commands. Defaults to `workspace-write` (can only modify files in workspace)."
     )
     parser.add_argument(
         "--SESSION_ID",
