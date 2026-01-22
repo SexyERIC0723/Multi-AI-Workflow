@@ -4,6 +4,254 @@
 
 const API_BASE = '/api';
 let ws = null;
+let currentLang = localStorage.getItem('maw-lang') || 'en';
+
+// ============= Internationalization (i18n) =============
+
+const translations = {
+  en: {
+    // Header
+    subtitle: 'Multi-AI Workflow Dashboard',
+    connected: 'Connected',
+    disconnected: 'Disconnected',
+
+    // Navigation
+    navOverview: 'Overview',
+    navSessions: 'Sessions',
+    navWorkflows: 'Workflows',
+    navAILogs: 'AI Logs',
+    navSkills: 'Skills',
+    navCodeSearch: 'Code Search',
+
+    // Overview
+    titleOverview: 'Overview',
+    statTotalSessions: 'Total Sessions',
+    statActiveSessions: 'Active Sessions',
+    statWorkflowRuns: 'Workflow Runs',
+    statAIExecutions: 'AI Executions',
+    aiProviderUsage: 'AI Provider Usage',
+    recentActivity: 'Recent Activity',
+    noAIExecutions: 'No AI executions yet',
+    noRecentActivity: 'No recent activity',
+    loading: 'Loading...',
+
+    // Sessions
+    titleSessions: 'Sessions',
+    newSession: '+ New Session',
+    allStatus: 'All Status',
+    active: 'Active',
+    completed: 'Completed',
+    paused: 'Paused',
+    error: 'Error',
+    noSessions: 'No sessions found',
+    sessionName: 'Session Name',
+    enterSessionName: 'Enter session name',
+    workflowLevel: 'Workflow Level',
+
+    // Workflows
+    titleWorkflows: 'Workflow Runs',
+    noWorkflows: 'No workflow runs found',
+
+    // AI Logs
+    titleAILogs: 'AI Execution Logs',
+    allProviders: 'All Providers',
+    noAILogs: 'No AI execution logs found',
+
+    // Skills
+    titleSkills: 'Installed Skills',
+    skillsDescription: 'Skills extend MAW with additional AI capabilities.',
+    noSkills: 'No skills installed',
+    installSkillsHint: 'Install skills using:',
+    enabled: 'Enabled',
+    disabled: 'Disabled',
+
+    // Code Search
+    titleCodeSearch: 'Code Search',
+    searchPlaceholder: 'Search code...',
+    searchButton: 'Search',
+    searchHint: 'Enter a search query to find code',
+    searchComingSoon: 'CodexLens search integration coming soon.',
+    searchIndexHint: 'Run <code>codex-lens index .</code> to index your codebase first.',
+
+    // Modal
+    cancel: 'Cancel',
+    confirm: 'Confirm',
+    deleteConfirm: 'Are you sure you want to delete this session?',
+
+    // Details
+    sessionDetails: 'Session Details',
+    sessionInfo: 'Session Info',
+    linkedAISessions: 'Linked AI Sessions',
+    recentWorkflows: 'Recent Workflows',
+    noAISessions: 'No AI sessions linked',
+    noWorkflowsLinked: 'No workflows',
+    deleteSession: 'Delete Session',
+
+    workflowDetails: 'Workflow Details',
+    workflowInfo: 'Workflow Info',
+    task: 'Task',
+    result: 'Result',
+
+    aiLogDetails: 'AI Log Details',
+    executionInfo: 'Execution Info',
+    provider: 'Provider',
+    status: 'Status',
+    started: 'Started',
+    tokens: 'Tokens',
+    prompt: 'Prompt',
+    response: 'Response',
+    truncated: '...(truncated)',
+
+    // Time
+    justNow: 'Just now',
+    minutesAgo: 'm ago',
+    hoursAgo: 'h ago',
+    daysAgo: 'd ago',
+
+    // Errors
+    failedToLoad: 'Failed to load',
+    failedToCreate: 'Failed to create session',
+    failedToDelete: 'Failed to delete session',
+  },
+
+  zh: {
+    // Header
+    subtitle: '多AI工作流仪表板',
+    connected: '已连接',
+    disconnected: '未连接',
+
+    // Navigation
+    navOverview: '概览',
+    navSessions: '会话',
+    navWorkflows: '工作流',
+    navAILogs: 'AI日志',
+    navSkills: '技能',
+    navCodeSearch: '代码搜索',
+
+    // Overview
+    titleOverview: '概览',
+    statTotalSessions: '总会话数',
+    statActiveSessions: '活跃会话',
+    statWorkflowRuns: '工作流运行',
+    statAIExecutions: 'AI执行次数',
+    aiProviderUsage: 'AI提供商使用情况',
+    recentActivity: '最近活动',
+    noAIExecutions: '暂无AI执行记录',
+    noRecentActivity: '暂无最近活动',
+    loading: '加载中...',
+
+    // Sessions
+    titleSessions: '会话',
+    newSession: '+ 新建会话',
+    allStatus: '全部状态',
+    active: '活跃',
+    completed: '已完成',
+    paused: '已暂停',
+    error: '错误',
+    noSessions: '暂无会话',
+    sessionName: '会话名称',
+    enterSessionName: '请输入会话名称',
+    workflowLevel: '工作流级别',
+
+    // Workflows
+    titleWorkflows: '工作流运行',
+    noWorkflows: '暂无工作流运行记录',
+
+    // AI Logs
+    titleAILogs: 'AI执行日志',
+    allProviders: '全部提供商',
+    noAILogs: '暂无AI执行日志',
+
+    // Skills
+    titleSkills: '已安装技能',
+    skillsDescription: '技能为MAW扩展额外的AI能力。',
+    noSkills: '暂无已安装技能',
+    installSkillsHint: '安装技能命令：',
+    enabled: '已启用',
+    disabled: '已禁用',
+
+    // Code Search
+    titleCodeSearch: '代码搜索',
+    searchPlaceholder: '搜索代码...',
+    searchButton: '搜索',
+    searchHint: '输入搜索关键词查找代码',
+    searchComingSoon: 'CodexLens搜索集成即将推出。',
+    searchIndexHint: '请先运行 <code>codex-lens index .</code> 索引代码库。',
+
+    // Modal
+    cancel: '取消',
+    confirm: '确认',
+    deleteConfirm: '确定要删除这个会话吗？',
+
+    // Details
+    sessionDetails: '会话详情',
+    sessionInfo: '会话信息',
+    linkedAISessions: '关联的AI会话',
+    recentWorkflows: '最近工作流',
+    noAISessions: '暂无关联的AI会话',
+    noWorkflowsLinked: '暂无工作流',
+    deleteSession: '删除会话',
+
+    workflowDetails: '工作流详情',
+    workflowInfo: '工作流信息',
+    task: '任务',
+    result: '结果',
+
+    aiLogDetails: 'AI日志详情',
+    executionInfo: '执行信息',
+    provider: '提供商',
+    status: '状态',
+    started: '开始时间',
+    tokens: 'Token数',
+    prompt: '提示词',
+    response: '响应',
+    truncated: '...(已截断)',
+
+    // Time
+    justNow: '刚刚',
+    minutesAgo: '分钟前',
+    hoursAgo: '小时前',
+    daysAgo: '天前',
+
+    // Errors
+    failedToLoad: '加载失败',
+    failedToCreate: '创建会话失败',
+    failedToDelete: '删除会话失败',
+  }
+};
+
+function t(key) {
+  return translations[currentLang][key] || translations['en'][key] || key;
+}
+
+function setLanguage(lang) {
+  currentLang = lang;
+  localStorage.setItem('maw-lang', lang);
+  updateUILanguage();
+}
+
+function updateUILanguage() {
+  // Update all translatable elements
+  document.querySelectorAll('[data-i18n]').forEach(el => {
+    const key = el.getAttribute('data-i18n');
+    if (el.tagName === 'INPUT') {
+      el.placeholder = t(key);
+    } else {
+      el.textContent = t(key);
+    }
+  });
+
+  // Update language selector
+  document.querySelectorAll('.lang-btn').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.lang === currentLang);
+  });
+
+  // Reload current view to update dynamic content
+  const activeNav = document.querySelector('.nav-item.active');
+  if (activeNav) {
+    switchView(activeNav.dataset.view);
+  }
+}
 
 // ============= WebSocket =============
 
@@ -40,10 +288,10 @@ function connectWebSocket() {
 function updateConnectionStatus(connected) {
   const badge = document.getElementById('connection-status');
   if (connected) {
-    badge.textContent = 'Connected';
+    badge.textContent = t('connected');
     badge.className = 'status-badge connected';
   } else {
-    badge.textContent = 'Disconnected';
+    badge.textContent = t('disconnected');
     badge.className = 'status-badge disconnected';
   }
 }
@@ -122,7 +370,7 @@ async function loadStats() {
     // AI Provider Usage
     const usageContainer = document.getElementById('ai-usage');
     if (Object.keys(stats.aiProviderUsage).length === 0) {
-      usageContainer.innerHTML = '<p class="placeholder">No AI executions yet</p>';
+      usageContainer.innerHTML = `<p class="placeholder">${t('noAIExecutions')}</p>`;
     } else {
       usageContainer.innerHTML = Object.entries(stats.aiProviderUsage)
         .map(([provider, count]) => `
@@ -150,7 +398,7 @@ async function loadRecentActivity() {
     sessionsData.sessions.forEach(s => {
       activities.push({
         icon: '📁',
-        title: `Session: ${s.name}`,
+        title: `${t('navSessions')}: ${s.name}`,
         time: s.updatedAt,
         type: 'session',
       });
@@ -159,7 +407,7 @@ async function loadRecentActivity() {
     workflowsData.workflows.forEach(w => {
       activities.push({
         icon: '🔄',
-        title: `Workflow: ${w.task.substring(0, 50)}...`,
+        title: `${t('navWorkflows')}: ${w.task.substring(0, 50)}...`,
         time: w.startedAt,
         type: 'workflow',
       });
@@ -170,7 +418,7 @@ async function loadRecentActivity() {
 
     const container = document.getElementById('recent-activity');
     if (activities.length === 0) {
-      container.innerHTML = '<p class="placeholder">No recent activity</p>';
+      container.innerHTML = `<p class="placeholder">${t('noRecentActivity')}</p>`;
     } else {
       container.innerHTML = activities.slice(0, 10).map(a => `
         <div class="activity-item">
@@ -185,7 +433,7 @@ async function loadRecentActivity() {
   } catch (error) {
     console.error('Failed to load activity:', error);
     document.getElementById('recent-activity').innerHTML =
-      '<p class="placeholder">Failed to load activity</p>';
+      `<p class="placeholder">${t('failedToLoad')}</p>`;
   }
 }
 
@@ -196,7 +444,7 @@ async function loadSessions() {
 
     const container = document.getElementById('sessions-list');
     if (data.sessions.length === 0) {
-      container.innerHTML = '<div class="empty-state">No sessions found</div>';
+      container.innerHTML = `<div class="empty-state">${t('noSessions')}</div>`;
     } else {
       container.innerHTML = data.sessions.map(s => `
         <div class="data-item" onclick="viewSession('${s.id}')">
@@ -214,7 +462,7 @@ async function loadSessions() {
   } catch (error) {
     console.error('Failed to load sessions:', error);
     document.getElementById('sessions-list').innerHTML =
-      '<p class="placeholder">Failed to load sessions</p>';
+      `<p class="placeholder">${t('failedToLoad')}</p>`;
   }
 }
 
@@ -224,7 +472,7 @@ async function loadWorkflows() {
 
     const container = document.getElementById('workflows-list');
     if (data.workflows.length === 0) {
-      container.innerHTML = '<div class="empty-state">No workflow runs found</div>';
+      container.innerHTML = `<div class="empty-state">${t('noWorkflows')}</div>`;
     } else {
       container.innerHTML = data.workflows.map(w => `
         <div class="data-item" onclick="viewWorkflow('${w.id}')">
@@ -242,7 +490,7 @@ async function loadWorkflows() {
   } catch (error) {
     console.error('Failed to load workflows:', error);
     document.getElementById('workflows-list').innerHTML =
-      '<p class="placeholder">Failed to load workflows</p>';
+      `<p class="placeholder">${t('failedToLoad')}</p>`;
   }
 }
 
@@ -253,7 +501,7 @@ async function loadAILogs() {
 
     const container = document.getElementById('ai-logs-list');
     if (data.logs.length === 0) {
-      container.innerHTML = '<div class="empty-state">No AI execution logs found</div>';
+      container.innerHTML = `<div class="empty-state">${t('noAILogs')}</div>`;
     } else {
       container.innerHTML = data.logs.map(log => `
         <div class="data-item" onclick="viewAILog('${log.id}')">
@@ -276,21 +524,21 @@ async function loadAILogs() {
   } catch (error) {
     console.error('Failed to load AI logs:', error);
     document.getElementById('ai-logs-list').innerHTML =
-      '<p class="placeholder">Failed to load AI logs</p>';
+      `<p class="placeholder">${t('failedToLoad')}</p>`;
   }
 }
 
 // ============= Actions =============
 
 function createSession() {
-  openModal('New Session', `
+  openModal(t('newSession'), `
     <form id="create-session-form">
       <div class="form-group">
-        <label>Session Name</label>
-        <input type="text" name="name" required placeholder="Enter session name">
+        <label>${t('sessionName')}</label>
+        <input type="text" name="name" required placeholder="${t('enterSessionName')}">
       </div>
       <div class="form-group">
-        <label>Workflow Level</label>
+        <label>${t('workflowLevel')}</label>
         <select name="workflowLevel">
           <option value="lite">Lite</option>
           <option value="lite-plan">Lite Plan</option>
@@ -315,14 +563,14 @@ function createSession() {
       loadSessions();
       loadStats();
     } catch (error) {
-      alert('Failed to create session: ' + error.message);
+      alert(t('failedToCreate') + ': ' + error.message);
     }
   });
 }
 
 function viewSession(id) {
   // Load and display session details
-  openModal('Session Details', '<p class="loading">Loading...</p>', null);
+  openModal(t('sessionDetails'), `<p class="loading">${t('loading')}</p>`, null);
 
   apiGet(`/sessions/${id}/details`)
     .then(data => {
@@ -336,28 +584,28 @@ function viewSession(id) {
             <code class="session-id">${sessionId}</code>
           </div>
         `)
-        .join('') || '<p class="placeholder">No AI sessions linked</p>';
+        .join('') || `<p class="placeholder">${t('noAISessions')}</p>`;
 
       const workflowsHtml = workflows?.length ? workflows.slice(0, 5).map(w => `
         <div class="mini-item">
           <span class="data-item-status ${w.status}">${w.status}</span>
           <span class="mini-title">${escapeHtml(w.task.substring(0, 40))}${w.task.length > 40 ? '...' : ''}</span>
         </div>
-      `).join('') : '<p class="placeholder">No workflows</p>';
+      `).join('') : `<p class="placeholder">${t('noWorkflowsLinked')}</p>`;
 
       document.getElementById('modal-body').innerHTML = `
         <div class="detail-section">
-          <h4>Session Info</h4>
+          <h4>${t('sessionInfo')}</h4>
           <div class="detail-item">
             <span class="detail-label">ID:</span>
             <code>${session.id}</code>
           </div>
           <div class="detail-item">
-            <span class="detail-label">Name:</span>
+            <span class="detail-label">${t('sessionName')}:</span>
             <span>${escapeHtml(session.name)}</span>
           </div>
           <div class="detail-item">
-            <span class="detail-label">Status:</span>
+            <span class="detail-label">${t('status')}:</span>
             <span class="data-item-status ${session.status}">${session.status}</span>
           </div>
           <div class="detail-item">
@@ -365,23 +613,23 @@ function viewSession(id) {
             <span>${session.workflowLevel || 'plan'}</span>
           </div>
           <div class="detail-item">
-            <span class="detail-label">Created:</span>
+            <span class="detail-label">${t('started')}:</span>
             <span>${formatTime(session.createdAt)}</span>
           </div>
         </div>
 
         <div class="detail-section">
-          <h4>Linked AI Sessions</h4>
+          <h4>${t('linkedAISessions')}</h4>
           ${aiSessionsHtml}
         </div>
 
         <div class="detail-section">
-          <h4>Recent Workflows</h4>
+          <h4>${t('recentWorkflows')}</h4>
           ${workflowsHtml}
         </div>
 
         <div class="detail-actions">
-          <button class="btn btn-danger" onclick="deleteSession('${session.id}')">Delete Session</button>
+          <button class="btn btn-danger" onclick="deleteSession('${session.id}')">${t('deleteSession')}</button>
         </div>
       `;
 
@@ -390,19 +638,19 @@ function viewSession(id) {
     })
     .catch(error => {
       document.getElementById('modal-body').innerHTML = `
-        <p class="error">Failed to load session: ${error.message}</p>
+        <p class="error">${t('failedToLoad')}: ${error.message}</p>
       `;
     });
 }
 
 function viewWorkflow(id) {
-  openModal('Workflow Details', '<p class="loading">Loading...</p>', null);
+  openModal(t('workflowDetails'), `<p class="loading">${t('loading')}</p>`, null);
 
   apiGet(`/workflows/${id}`)
     .then(workflow => {
       document.getElementById('modal-body').innerHTML = `
         <div class="detail-section">
-          <h4>Workflow Info</h4>
+          <h4>${t('workflowInfo')}</h4>
           <div class="detail-item">
             <span class="detail-label">ID:</span>
             <code>${workflow.id}</code>
@@ -412,36 +660,36 @@ function viewWorkflow(id) {
             <span class="level-badge">${workflow.level}</span>
           </div>
           <div class="detail-item">
-            <span class="detail-label">Status:</span>
+            <span class="detail-label">${t('status')}:</span>
             <span class="data-item-status ${workflow.status}">${workflow.status}</span>
           </div>
           <div class="detail-item">
-            <span class="detail-label">Started:</span>
+            <span class="detail-label">${t('started')}:</span>
             <span>${formatTime(workflow.startedAt)}</span>
           </div>
           ${workflow.completedAt ? `
           <div class="detail-item">
-            <span class="detail-label">Completed:</span>
+            <span class="detail-label">${t('completed')}:</span>
             <span>${formatTime(workflow.completedAt)}</span>
           </div>
           ` : ''}
         </div>
 
         <div class="detail-section">
-          <h4>Task</h4>
+          <h4>${t('task')}</h4>
           <pre class="code-block">${escapeHtml(workflow.task)}</pre>
         </div>
 
         ${workflow.result ? `
         <div class="detail-section">
-          <h4>Result</h4>
+          <h4>${t('result')}</h4>
           <pre class="code-block">${escapeHtml(workflow.result)}</pre>
         </div>
         ` : ''}
 
         ${workflow.error ? `
         <div class="detail-section">
-          <h4>Error</h4>
+          <h4>${t('error')}</h4>
           <pre class="code-block error">${escapeHtml(workflow.error)}</pre>
         </div>
         ` : ''}
@@ -451,54 +699,54 @@ function viewWorkflow(id) {
     })
     .catch(error => {
       document.getElementById('modal-body').innerHTML = `
-        <p class="error">Failed to load workflow: ${error.message}</p>
+        <p class="error">${t('failedToLoad')}: ${error.message}</p>
       `;
     });
 }
 
 function viewAILog(id) {
-  openModal('AI Log Details', '<p class="loading">Loading...</p>', null);
+  openModal(t('aiLogDetails'), `<p class="loading">${t('loading')}</p>`, null);
 
   apiGet(`/ai-logs/${id}`)
     .then(log => {
       document.getElementById('modal-body').innerHTML = `
         <div class="detail-section">
-          <h4>Execution Info</h4>
+          <h4>${t('executionInfo')}</h4>
           <div class="detail-item">
-            <span class="detail-label">Provider:</span>
+            <span class="detail-label">${t('provider')}:</span>
             <span class="ai-provider-badge">${log.aiProvider}</span>
           </div>
           <div class="detail-item">
-            <span class="detail-label">Status:</span>
+            <span class="detail-label">${t('status')}:</span>
             <span class="data-item-status ${log.status}">${log.status}</span>
           </div>
           <div class="detail-item">
-            <span class="detail-label">Started:</span>
+            <span class="detail-label">${t('started')}:</span>
             <span>${formatTime(log.startedAt)}</span>
           </div>
           ${log.tokensUsed ? `
           <div class="detail-item">
-            <span class="detail-label">Tokens:</span>
+            <span class="detail-label">${t('tokens')}:</span>
             <span>${log.tokensUsed}</span>
           </div>
           ` : ''}
         </div>
 
         <div class="detail-section">
-          <h4>Prompt</h4>
+          <h4>${t('prompt')}</h4>
           <pre class="code-block">${escapeHtml(log.prompt)}</pre>
         </div>
 
         ${log.response ? `
         <div class="detail-section">
-          <h4>Response</h4>
-          <pre class="code-block">${escapeHtml(log.response.substring(0, 2000))}${log.response.length > 2000 ? '\n...(truncated)' : ''}</pre>
+          <h4>${t('response')}</h4>
+          <pre class="code-block">${escapeHtml(log.response.substring(0, 2000))}${log.response.length > 2000 ? t('truncated') : ''}</pre>
         </div>
         ` : ''}
 
         ${log.error ? `
         <div class="detail-section">
-          <h4>Error</h4>
+          <h4>${t('error')}</h4>
           <pre class="code-block error">${escapeHtml(log.error)}</pre>
         </div>
         ` : ''}
@@ -508,13 +756,13 @@ function viewAILog(id) {
     })
     .catch(error => {
       document.getElementById('modal-body').innerHTML = `
-        <p class="error">Failed to load AI log: ${error.message}</p>
+        <p class="error">${t('failedToLoad')}: ${error.message}</p>
       `;
     });
 }
 
 async function deleteSession(id) {
-  if (!confirm('Are you sure you want to delete this session?')) return;
+  if (!confirm(t('deleteConfirm'))) return;
 
   try {
     await apiDelete(`/sessions/${id}`);
@@ -522,7 +770,7 @@ async function deleteSession(id) {
     loadSessions();
     loadStats();
   } catch (error) {
-    alert('Failed to delete session: ' + error.message);
+    alert(t('failedToDelete') + ': ' + error.message);
   }
 }
 
@@ -534,8 +782,8 @@ async function loadSkills() {
     if (data.skills.length === 0) {
       container.innerHTML = `
         <div class="empty-state">
-          <p>No skills installed</p>
-          <p class="hint">Install skills using: <code>maw skill install &lt;source&gt;</code></p>
+          <p>${t('noSkills')}</p>
+          <p class="hint">${t('installSkillsHint')} <code>maw skill install &lt;source&gt;</code></p>
         </div>
       `;
     } else {
@@ -555,7 +803,7 @@ async function loadSkills() {
           </div>
           <div class="data-item-meta">
             <div class="skill-version">v${skill.version}</div>
-            <span class="data-item-status ${skill.enabled ? 'active' : 'paused'}">${skill.enabled ? 'Enabled' : 'Disabled'}</span>
+            <span class="data-item-status ${skill.enabled ? 'active' : 'paused'}">${skill.enabled ? t('enabled') : t('disabled')}</span>
           </div>
         </div>
       `).join('');
@@ -563,7 +811,7 @@ async function loadSkills() {
   } catch (error) {
     console.error('Failed to load skills:', error);
     document.getElementById('skills-list').innerHTML =
-      '<p class="placeholder">Failed to load skills</p>';
+      `<p class="placeholder">${t('failedToLoad')}</p>`;
   }
 }
 
@@ -572,15 +820,15 @@ async function performSearch() {
   if (!query) return;
 
   const container = document.getElementById('search-results');
-  container.innerHTML = '<p class="loading">Searching...</p>';
+  container.innerHTML = `<p class="loading">${t('loading')}</p>`;
 
   // Note: This would need CodexLens integration
   // For now, show a placeholder
   setTimeout(() => {
     container.innerHTML = `
       <div class="empty-state">
-        <p>CodexLens search integration coming soon.</p>
-        <p>Run <code>codex-lens index .</code> to index your codebase first.</p>
+        <p>${t('searchComingSoon')}</p>
+        <p>${t('searchIndexHint')}</p>
       </div>
     `;
   }, 500);
@@ -649,10 +897,10 @@ function formatTime(timestamp) {
   const now = new Date();
   const diff = now - date;
 
-  if (diff < 60000) return 'Just now';
-  if (diff < 3600000) return `${Math.floor(diff / 60000)}m ago`;
-  if (diff < 86400000) return `${Math.floor(diff / 3600000)}h ago`;
-  if (diff < 604800000) return `${Math.floor(diff / 86400000)}d ago`;
+  if (diff < 60000) return t('justNow');
+  if (diff < 3600000) return `${Math.floor(diff / 60000)}${t('minutesAgo')}`;
+  if (diff < 86400000) return `${Math.floor(diff / 3600000)}${t('hoursAgo')}`;
+  if (diff < 604800000) return `${Math.floor(diff / 86400000)}${t('daysAgo')}`;
 
   return date.toLocaleDateString();
 }
@@ -660,6 +908,9 @@ function formatTime(timestamp) {
 // ============= Initialization =============
 
 document.addEventListener('DOMContentLoaded', () => {
+  // Apply saved language
+  updateUILanguage();
+
   // Setup navigation
   document.querySelectorAll('.nav-item').forEach(item => {
     item.addEventListener('click', (e) => {

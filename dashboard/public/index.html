@@ -12,10 +12,14 @@
     <header class="header">
       <div class="header-left">
         <h1 class="logo">MAW</h1>
-        <span class="subtitle">Multi-AI Workflow Dashboard</span>
+        <span class="subtitle" data-i18n="subtitle">Multi-AI Workflow Dashboard</span>
       </div>
       <div class="header-right">
-        <span id="connection-status" class="status-badge disconnected">Disconnected</span>
+        <div class="lang-switcher">
+          <button class="lang-btn" data-lang="en" onclick="setLanguage('en')">EN</button>
+          <button class="lang-btn" data-lang="zh" onclick="setLanguage('zh')">ZH</button>
+        </div>
+        <span id="connection-status" class="status-badge disconnected" data-i18n="disconnected">Disconnected</span>
       </div>
     </header>
 
@@ -26,27 +30,27 @@
         <nav class="nav">
           <a href="#" class="nav-item active" data-view="overview">
             <span class="nav-icon">📊</span>
-            Overview
+            <span data-i18n="navOverview">Overview</span>
           </a>
           <a href="#" class="nav-item" data-view="sessions">
             <span class="nav-icon">📁</span>
-            Sessions
+            <span data-i18n="navSessions">Sessions</span>
           </a>
           <a href="#" class="nav-item" data-view="workflows">
             <span class="nav-icon">🔄</span>
-            Workflows
+            <span data-i18n="navWorkflows">Workflows</span>
           </a>
           <a href="#" class="nav-item" data-view="ai-logs">
             <span class="nav-icon">🤖</span>
-            AI Logs
+            <span data-i18n="navAILogs">AI Logs</span>
           </a>
           <a href="#" class="nav-item" data-view="skills">
             <span class="nav-icon">🧩</span>
-            Skills
+            <span data-i18n="navSkills">Skills</span>
           </a>
           <a href="#" class="nav-item" data-view="search">
             <span class="nav-icon">🔍</span>
-            Code Search
+            <span data-i18n="navCodeSearch">Code Search</span>
           </a>
         </nav>
       </aside>
@@ -55,99 +59,99 @@
       <div class="content">
         <!-- Overview View -->
         <section id="view-overview" class="view active">
-          <h2>Overview</h2>
+          <h2 data-i18n="titleOverview">Overview</h2>
           <div class="stats-grid">
             <div class="stat-card">
               <div class="stat-value" id="stat-sessions">-</div>
-              <div class="stat-label">Total Sessions</div>
+              <div class="stat-label" data-i18n="statTotalSessions">Total Sessions</div>
             </div>
             <div class="stat-card">
               <div class="stat-value" id="stat-active">-</div>
-              <div class="stat-label">Active Sessions</div>
+              <div class="stat-label" data-i18n="statActiveSessions">Active Sessions</div>
             </div>
             <div class="stat-card">
               <div class="stat-value" id="stat-workflows">-</div>
-              <div class="stat-label">Workflow Runs</div>
+              <div class="stat-label" data-i18n="statWorkflowRuns">Workflow Runs</div>
             </div>
             <div class="stat-card">
               <div class="stat-value" id="stat-ai">-</div>
-              <div class="stat-label">AI Executions</div>
+              <div class="stat-label" data-i18n="statAIExecutions">AI Executions</div>
             </div>
           </div>
 
-          <h3>AI Provider Usage</h3>
+          <h3 data-i18n="aiProviderUsage">AI Provider Usage</h3>
           <div class="ai-usage" id="ai-usage">
-            <p class="loading">Loading...</p>
+            <p class="loading" data-i18n="loading">Loading...</p>
           </div>
 
-          <h3>Recent Activity</h3>
+          <h3 data-i18n="recentActivity">Recent Activity</h3>
           <div id="recent-activity" class="activity-list">
-            <p class="loading">Loading...</p>
+            <p class="loading" data-i18n="loading">Loading...</p>
           </div>
         </section>
 
         <!-- Sessions View -->
         <section id="view-sessions" class="view">
           <div class="view-header">
-            <h2>Sessions</h2>
-            <button class="btn btn-primary" onclick="createSession()">+ New Session</button>
+            <h2 data-i18n="titleSessions">Sessions</h2>
+            <button class="btn btn-primary" onclick="createSession()" data-i18n="newSession">+ New Session</button>
           </div>
           <div class="filter-bar">
             <select id="session-status-filter" onchange="loadSessions()">
-              <option value="">All Status</option>
-              <option value="active">Active</option>
-              <option value="completed">Completed</option>
-              <option value="paused">Paused</option>
-              <option value="error">Error</option>
+              <option value="" data-i18n="allStatus">All Status</option>
+              <option value="active" data-i18n="active">Active</option>
+              <option value="completed" data-i18n="completed">Completed</option>
+              <option value="paused" data-i18n="paused">Paused</option>
+              <option value="error" data-i18n="error">Error</option>
             </select>
           </div>
           <div id="sessions-list" class="data-list">
-            <p class="loading">Loading...</p>
+            <p class="loading" data-i18n="loading">Loading...</p>
           </div>
         </section>
 
         <!-- Workflows View -->
         <section id="view-workflows" class="view">
-          <h2>Workflow Runs</h2>
+          <h2 data-i18n="titleWorkflows">Workflow Runs</h2>
           <div id="workflows-list" class="data-list">
-            <p class="loading">Loading...</p>
+            <p class="loading" data-i18n="loading">Loading...</p>
           </div>
         </section>
 
         <!-- AI Logs View -->
         <section id="view-ai-logs" class="view">
-          <h2>AI Execution Logs</h2>
+          <h2 data-i18n="titleAILogs">AI Execution Logs</h2>
           <div class="filter-bar">
             <select id="ai-provider-filter" onchange="loadAILogs()">
-              <option value="">All Providers</option>
+              <option value="" data-i18n="allProviders">All Providers</option>
               <option value="claude">Claude</option>
               <option value="codex">Codex</option>
               <option value="gemini">Gemini</option>
             </select>
           </div>
           <div id="ai-logs-list" class="data-list">
-            <p class="loading">Loading...</p>
+            <p class="loading" data-i18n="loading">Loading...</p>
           </div>
         </section>
 
         <!-- Skills View -->
         <section id="view-skills" class="view">
-          <h2>Installed Skills</h2>
-          <p class="view-description">Skills extend MAW with additional AI capabilities.</p>
+          <h2 data-i18n="titleSkills">Installed Skills</h2>
+          <p class="view-description" data-i18n="skillsDescription">Skills extend MAW with additional AI capabilities.</p>
           <div id="skills-list" class="data-list">
-            <p class="loading">Loading...</p>
+            <p class="loading" data-i18n="loading">Loading...</p>
           </div>
         </section>
 
         <!-- Search View -->
         <section id="view-search" class="view">
-          <h2>Code Search</h2>
+          <h2 data-i18n="titleCodeSearch">Code Search</h2>
           <div class="search-box">
-            <input type="text" id="search-query" placeholder="Search code..." onkeypress="if(event.key==='Enter') performSearch()">
-            <button class="btn btn-primary" onclick="performSearch()">Search</button>
+            <input type="text" id="search-query" data-i18n="searchPlaceholder" placeholder="Search code..." onkeypress="if(event.key==='Enter') performSearch()">
+            <button class="btn btn-primary" onclick="performSearch()" data-i18n="searchButton">Search</button>
           </div>
           <div id="search-results" class="search-results">
-            <p class="placeholder">Enter a search query to find code</p>
+            <p class="placeholder" data-i18n="searchHint">Enter a search query to find code</p>
           </div>
         </section>
       </div>
@@ -164,8 +168,8 @@
           <!-- Modal content -->
         </div>
         <div class="modal-footer">
-          <button class="btn" onclick="closeModal()">Cancel</button>
-          <button class="btn btn-primary" id="modal-confirm">Confirm</button>
+          <button class="btn" onclick="closeModal()" data-i18n="cancel">Cancel</button>
+          <button class="btn btn-primary" id="modal-confirm" data-i18n="confirm">Confirm</button>
         </div>
       </div>
     </div>

@@ -56,6 +56,42 @@ body {
   color: var(--accent-blue);
 }
 
+.header-right {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.lang-switcher {
+  display: flex;
+  gap: 0.25rem;
+  background: var(--bg-tertiary);
+  padding: 0.25rem;
+  border-radius: 6px;
+}
+
+.lang-btn {
+  padding: 0.25rem 0.5rem;
+  border: none;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 0.75rem;
+  font-weight: 500;
+  cursor: pointer;
+  border-radius: 4px;
+  transition: all 0.2s;
+}
+
+.lang-btn:hover {
+  color: var(--text-primary);
+  background: var(--bg-secondary);
+}
+
+.lang-btn.active {
+  color: var(--text-primary);
+  background: var(--accent-blue);
+}
+
 .subtitle {
   color: var(--text-secondary);
   font-size: 0.875rem;
