@@ -14,7 +14,7 @@ import { loadConfig } from '../config/loader.js';
 /**
  * Execute Level 1: lite workflow
  */
-export async function executeLiteWorkflow(task: string): Promise<void> {
+export async function executeLiteWorkflow(task: string, options: { cd?: string } = {}): Promise<void> {
   const spinner = ora('Executing lite workflow...').start();
 
   try {
@@ -26,7 +26,7 @@ export async function executeLiteWorkflow(task: string): Promise<void> {
 
     const workflow = WorkflowEngine.createLiteWorkflow(task);
     const context: WorkflowContext = {
-      projectRoot: process.cwd(),
+      projectRoot: options.cd || process.cwd(),
       task,
     };
 
@@ -50,7 +50,7 @@ export async function executeLiteWorkflow(task: string): Promise<void> {
  */
 export async function executePlanWorkflow(
   task: string,
-  options: { level: string }
+  options: { level: string; cd?: string }
 ): Promise<void> {
   const spinner = ora(`Executing ${options.level} workflow...`).start();
 
@@ -92,7 +92,7 @@ export async function executePlanWorkflow(
     }
 
     const context: WorkflowContext = {
-      projectRoot: process.cwd(),
+      projectRoot: options.cd || process.cwd(),
       task,
     };
 
@@ -125,7 +125,7 @@ export async function executePlanWorkflow(
  */
 export async function executeBrainstorm(
   topic: string,
-  options: { parallel: boolean; roles: string }
+  options: { parallel: boolean; roles: string; cd?: string }
 ): Promise<void> {
   const spinner = ora('Starting brainstorm session...').start();
 
@@ -154,7 +154,7 @@ export async function executeBrainstorm(
 
     const workflow = WorkflowEngine.createBrainstormWorkflow(topic, options.parallel);
     const context: WorkflowContext = {
-      projectRoot: process.cwd(),
+      projectRoot: options.cd || process.cwd(),
       task: topic,
     };
 
@@ -198,7 +198,7 @@ export async function executeBrainstorm(
  */
 export async function executeFivePhase(
   task: string,
-  options: { parallel: boolean }
+  options: { parallel: boolean; cd?: string }
 ): Promise<void> {
   console.log(chalk.cyan('\n╔══════════════════════════════════════════════════════════════╗'));
   console.log(chalk.cyan('║  5-Phase Collaboration Workflow (Skills Pattern)             ║'));
@@ -241,7 +241,7 @@ export async function executeFivePhase(
     }
 
     const context: WorkflowContext = {
-      projectRoot: process.cwd(),
+      projectRoot: options.cd || process.cwd(),
       task,
     };
 

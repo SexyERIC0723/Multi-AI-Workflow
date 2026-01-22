@@ -34,16 +34,18 @@ const workflowCmd = program
 workflowCmd
   .command('lite <task>')
   .description('Level 1: Instant execution, no artifacts')
-  .action(async (task: string) => {
+  .option('--cd <dir>', 'Working directory', process.cwd())
+  .action(async (task: string, options: { cd: string }) => {
     const { executeLiteWorkflow } = await import('./commands/workflow.js');
-    await executeLiteWorkflow(task);
+    await executeLiteWorkflow(task, options);
   });
 
 workflowCmd
   .command('plan <task>')
   .description('Level 3: Standard planning with session persistence')
   .option('-l, --level <level>', 'Workflow level (lite-plan|plan|tdd-plan)', 'plan')
-  .action(async (task: string, options: { level: string }) => {
+  .option('--cd <dir>', 'Working directory', process.cwd())
+  .action(async (task: string, options: { level: string; cd: string }) => {
     const { executePlanWorkflow } = await import('./commands/workflow.js');
     await executePlanWorkflow(task, options);
   });
@@ -53,7 +55,8 @@ workflowCmd
   .description('Level 4: Multi-role brainstorming')
   .option('-p, --parallel', 'Enable parallel execution', false)
   .option('-r, --roles <roles>', 'Comma-separated roles', 'architect,developer,reviewer')
-  .action(async (topic: string, options: { parallel: boolean; roles: string }) => {
+  .option('--cd <dir>', 'Working directory', process.cwd())
+  .action(async (topic: string, options: { parallel: boolean; roles: string; cd: string }) => {
     const { executeBrainstorm } = await import('./commands/workflow.js');
     await executeBrainstorm(topic, options);
   });
@@ -62,7 +65,8 @@ workflowCmd
   .command('five-phase <task>')
   .description('5-Phase collaboration (Skills pattern): Context → Analysis → Prototype → Implement → Audit')
   .option('-p, --parallel', 'Enable parallel analysis', true)
-  .action(async (task: string, options: { parallel: boolean }) => {
+  .option('--cd <dir>', 'Working directory', process.cwd())
+  .action(async (task: string, options: { parallel: boolean; cd: string }) => {
     const { executeFivePhase } = await import('./commands/workflow.js');
     await executeFivePhase(task, options);
   });
