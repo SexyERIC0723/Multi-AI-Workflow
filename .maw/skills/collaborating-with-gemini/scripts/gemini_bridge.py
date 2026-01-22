@@ -265,7 +265,7 @@ def main():
     parser = argparse.ArgumentParser(description="Gemini Bridge - Supports proxy API and native CLI")
     parser.add_argument("--PROMPT", required=True, help="Instruction for the task to send to gemini.")
     parser.add_argument("--cd", required=True, type=Path, help="Set the workspace root for gemini.")
-    parser.add_argument("--sandbox", action="store_true", default=False, help="Run in sandbox mode.")
+    parser.add_argument("--sandbox", action="store_true", default=True, help="Run in sandbox mode (can only modify files in workspace). Defaults to True for safety.")
     parser.add_argument("--SESSION_ID", default="", help="Resume the specified session.")
     parser.add_argument("--return-all-messages", action="store_true", help="Return all messages.")
     parser.add_argument("--model", default="", help="The model to use.")

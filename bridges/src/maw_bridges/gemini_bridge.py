@@ -214,8 +214,8 @@ def main():
     parser.add_argument(
         "--sandbox",
         action="store_true",
-        default=False,
-        help="Run in sandbox mode. Defaults to False."
+        default=True,
+        help="Run in sandbox mode (can only modify files in workspace). Defaults to True for safety."
     )
     parser.add_argument(
         "--SESSION_ID",
