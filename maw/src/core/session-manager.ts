@@ -8,6 +8,7 @@
 import { v4 as uuidv4 } from 'uuid';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs';
 import { join } from 'path';
+import { homedir } from 'os';
 
 export type SessionStatus = 'active' | 'paused' | 'completed' | 'archived';
 export type WorkflowLevel = 'lite' | 'lite-plan' | 'plan' | 'tdd-plan' | 'brainstorm' | 'delegate' | 'collaborate' | 'ralph';
@@ -78,11 +79,13 @@ export interface SessionCreateOptions {
 export class SessionManager {
   private sessions: Map<string, UnifiedSession> = new Map();
   private persistPath: string;
+  private globalPersistPath: string;
   private workflowDir: string;
   private taskDir: string;
 
   constructor(projectRoot: string = process.cwd()) {
     this.persistPath = join(projectRoot, '.maw', 'sessions.json');
+    this.globalPersistPath = join(homedir(), '.maw', 'sessions.json');
     this.workflowDir = join(projectRoot, '.workflow');
     this.taskDir = join(projectRoot, '.task');
 
@@ -95,6 +98,10 @@ export class SessionManager {
     if (!existsSync(mawDir)) {
       mkdirSync(mawDir, { recursive: true });
     }
+    const globalMawDir = join(this.globalPersistPath, '..');
+    if (!existsSync(globalMawDir)) {
+      mkdirSync(globalMawDir, { recursive: true });
+    }
     if (!existsSync(this.workflowDir)) {
       mkdirSync(this.workflowDir, { recursive: true });
     }
@@ -104,15 +111,19 @@ export class SessionManager {
   }
 
   private loadSessions(): void {
-    if (existsSync(this.persistPath)) {
-      try {
-        const data = JSON.parse(readFileSync(this.persistPath, 'utf-8'));
-        for (const [id, session] of Object.entries(data)) {
-          this.sessions.set(id, session as UnifiedSession);
+    // Try to load from project-specific path first, then global
+    const pathsToTry = [this.persistPath, this.globalPersistPath];
+
+    for (const path of pathsToTry) {
+      if (existsSync(path)) {
+        try {
+          const data = JSON.parse(readFileSync(path, 'utf-8'));
+          for (const [id, session] of Object.entries(data)) {
+            this.sessions.set(id, session as UnifiedSession);
+          }
+        } catch {
+          // Continue to next path or start fresh
         }
-      } catch {
-        // Start fresh if corrupted
-        this.sessions = new Map();
       }
     }
   }
@@ -122,7 +133,13 @@ export class SessionManager {
     for (const [id, session] of this.sessions) {
       data[id] = session;
     }
-    writeFileSync(this.persistPath, JSON.stringify(data, null, 2));
+    const jsonData = JSON.stringify(data, null, 2);
+
+    // Save to project-specific location
+    writeFileSync(this.persistPath, jsonData);
+
+    // Also save to global location for dashboard access
+    writeFileSync(this.globalPersistPath, jsonData);
   }
 
   /**

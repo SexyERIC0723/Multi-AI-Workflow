@@ -6,6 +6,7 @@
 
 import { existsSync, readFileSync, readdirSync, watchFile, unwatchFile } from 'fs';
 import { join } from 'path';
+import { homedir } from 'os';
 import { v4 as uuidv4 } from 'uuid';
 import { DashboardStorage } from './storage';
 
@@ -35,6 +36,39 @@ interface MAWSession {
   updatedAt: string;
 }
 
+// SessionManager format (key-value object)
+interface SessionManagerData {
+  [sessionId: string]: {
+    mawSessionId: string;
+    name?: string;  // Top-level name field
+    aiSessions: Record<string, string>;
+    workflowSession?: {
+      wfsPath: string;
+      taskFiles: string[];
+      level: string;
+    };
+    sharedContext: {
+      projectRoot: string;
+      relevantFiles: string[];
+      taskHistory: Array<{
+        id: string;
+        description: string;
+        assignedAI: string;
+        status: string;
+        timestamp: string;
+        result?: string;
+      }>;
+    };
+    metadata: {
+      name?: string;  // Metadata name (backup)
+      status: string;
+      createdAt: string;
+      updatedAt: string;
+    };
+  };
+}
+
+// Legacy format (array-based)
 interface MAWSessionsFile {
   sessions: MAWSession[];
   lastUpdated: string;
@@ -76,10 +110,18 @@ export class MAWBridge {
   private dataDir: string;
   private storage: DashboardStorage;
   private watchers: Map<string, ReturnType<typeof watchFile>> = new Map();
+  private sessionPaths: string[] = [];
 
   constructor(dataDir: string, storage: DashboardStorage) {
     this.dataDir = dataDir;
     this.storage = storage;
+
+    // Search multiple locations for sessions.json
+    this.sessionPaths = [
+      join(homedir(), '.maw', 'sessions.json'),           // Global installation
+      join(dataDir, 'sessions.json'),                      // Provided dataDir
+      join(process.cwd(), '.maw', 'sessions.json'),       // Current working directory
+    ];
   }
 
   /**
@@ -93,66 +135,113 @@ export class MAWBridge {
   }
 
   /**
+   * Parse sessions data - handles both SessionManager format and legacy format
+   */
+  private parseSessionsData(content: string): MAWSession[] {
+    const data = JSON.parse(content);
+
+    // Check if it's the SessionManager format (object with session IDs as keys)
+    if (data && typeof data === 'object' && !Array.isArray(data) && !data.sessions) {
+      // SessionManager format: { "session-id": { ... }, ... }
+      const sessions: MAWSession[] = [];
+      for (const [sessionId, sessionData] of Object.entries(data as SessionManagerData)) {
+        const session = sessionData as SessionManagerData[string];
+        sessions.push({
+          mawSessionId: session.mawSessionId || sessionId,
+          name: session.name || session.metadata?.name || 'Unnamed Session',
+          status: (session.metadata?.status || 'active') as 'active' | 'paused' | 'completed' | 'archived',
+          workflowLevel: session.workflowSession?.level || 'plan',
+          aiSessions: session.aiSessions || {},
+          sharedContext: session.sharedContext || {
+            projectRoot: '',
+            relevantFiles: [],
+            taskHistory: [],
+          },
+          createdAt: session.metadata?.createdAt || new Date().toISOString(),
+          updatedAt: session.metadata?.updatedAt || new Date().toISOString(),
+        });
+      }
+      return sessions;
+    }
+
+    // Legacy format: { sessions: [...], lastUpdated: "..." }
+    if (data.sessions && Array.isArray(data.sessions)) {
+      return data.sessions;
+    }
+
+    return [];
+  }
+
+  /**
    * Sync MAW sessions to Dashboard
    */
   async syncSessions(): Promise<void> {
-    const sessionsPath = join(this.dataDir, 'sessions.json');
+    let foundSessions = false;
 
-    if (!existsSync(sessionsPath)) {
-      console.log('[MAW Bridge] No sessions.json found');
-      return;
-    }
+    for (const sessionsPath of this.sessionPaths) {
+      if (!existsSync(sessionsPath)) {
+        continue;
+      }
 
-    try {
-      const content = readFileSync(sessionsPath, 'utf-8');
-      const data: MAWSessionsFile = JSON.parse(content);
+      console.log(`[MAW Bridge] Found sessions at: ${sessionsPath}`);
+      foundSessions = true;
 
-      for (const session of data.sessions) {
-        // Check if session exists in dashboard
-        const existing = this.storage.getSession(session.mawSessionId);
+      try {
+        const content = readFileSync(sessionsPath, 'utf-8');
+        const sessions = this.parseSessionsData(content);
 
-        if (!existing) {
-          // Create new session in dashboard
-          this.storage.createSession({
-            id: session.mawSessionId,
-            name: session.name,
-            status: mapStatus(session.status),
-            workflowLevel: session.workflowLevel || 'plan',
-            metadata: {
-              aiSessions: session.aiSessions,
-              projectRoot: session.sharedContext.projectRoot,
-            },
-          });
-          console.log(`[MAW Bridge] Synced session: ${session.name}`);
-        } else {
-          // Update existing session
-          this.storage.updateSession(session.mawSessionId, {
-            status: mapStatus(session.status),
-            metadata: {
-              aiSessions: session.aiSessions,
-              projectRoot: session.sharedContext.projectRoot,
-            },
-          });
-        }
+        for (const session of sessions) {
+          // Check if session exists in dashboard
+          const existing = this.storage.getSession(session.mawSessionId);
 
-        // Sync task history as workflow runs
-        for (const task of session.sharedContext.taskHistory) {
-          const existingWorkflow = this.storage.getWorkflowByTaskId(task.id);
-
-          if (!existingWorkflow) {
-            this.storage.createWorkflowRun({
-              id: task.id || uuidv4(),
-              sessionId: session.mawSessionId,
-              task: task.description,
-              level: session.workflowLevel || 'plan',
-              status: mapStatus(task.status) as 'pending' | 'running' | 'completed' | 'failed',
-              result: task.result,
+          if (!existing) {
+            // Create new session in dashboard
+            this.storage.createSession({
+              id: session.mawSessionId,
+              name: session.name,
+              status: mapStatus(session.status),
+              workflowLevel: session.workflowLevel || 'plan',
+              metadata: {
+                aiSessions: session.aiSessions,
+                projectRoot: session.sharedContext.projectRoot,
+              },
+            });
+            console.log(`[MAW Bridge] Synced session: ${session.name}`);
+          } else {
+            // Update existing session
+            this.storage.updateSession(session.mawSessionId, {
+              name: session.name,
+              status: mapStatus(session.status),
+              metadata: {
+                aiSessions: session.aiSessions,
+                projectRoot: session.sharedContext.projectRoot,
+              },
             });
           }
+
+          // Sync task history as workflow runs
+          for (const task of session.sharedContext.taskHistory) {
+            const existingWorkflow = this.storage.getWorkflowByTaskId(task.id);
+
+            if (!existingWorkflow) {
+              this.storage.createWorkflowRun({
+                id: task.id || uuidv4(),
+                sessionId: session.mawSessionId,
+                task: task.description,
+                level: session.workflowLevel || 'plan',
+                status: mapStatus(task.status) as 'pending' | 'running' | 'completed' | 'failed',
+                result: task.result,
+              });
+            }
+          }
         }
+      } catch (error) {
+        console.error(`[MAW Bridge] Error syncing sessions from ${sessionsPath}:`, error);
       }
-    } catch (error) {
-      console.error('[MAW Bridge] Error syncing sessions:', error);
+    }
+
+    if (!foundSessions) {
+      console.log('[MAW Bridge] No sessions.json found in any location');
     }
   }
 
@@ -292,14 +381,16 @@ export class MAWBridge {
    * Start watching for file changes
    */
   private startWatching(): void {
-    const sessionsPath = join(this.dataDir, 'sessions.json');
-
-    if (existsSync(sessionsPath)) {
-      watchFile(sessionsPath, { interval: 2000 }, () => {
-        console.log('[MAW Bridge] sessions.json changed, resyncing...');
-        this.syncSessions();
-      });
-      this.watchers.set(sessionsPath, sessionsPath as any);
+    // Watch all session paths
+    for (const sessionsPath of this.sessionPaths) {
+      if (existsSync(sessionsPath)) {
+        watchFile(sessionsPath, { interval: 2000 }, () => {
+          console.log(`[MAW Bridge] ${sessionsPath} changed, resyncing...`);
+          this.syncSessions();
+        });
+        this.watchers.set(sessionsPath, sessionsPath as any);
+        console.log(`[MAW Bridge] Watching: ${sessionsPath}`);
+      }
     }
   }
 
